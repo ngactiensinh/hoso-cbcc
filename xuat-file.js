@@ -77,8 +77,55 @@ const bangKhongVien = (cot) => `<w:tbl><w:tblPr><w:tblW w:w="${W_VUNG}" w:type="
 <w:tblGrid>${cot.map(c => `<w:gridCol w:w="${c.w}"/>`).join('')}</w:tblGrid><w:tr>${cot.map(c =>
     `<w:tc><w:tcPr><w:tcW w:w="${c.w}" w:type="dxa"/></w:tcPr>${c.noiDung}</w:tc>`).join('')}</w:tr></w:tbl>`;
 
-async function word(o) {
+
+// Đóng gói thân văn bản thành file .docx (A4 dọc hoặc ngang)
+const NS = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" mc:Ignorable="w14"';
+async function taoDocx(than, { ngang = false } = {}) {
     const JSZip = await napThuVien(URL_JSZIP, 'JSZip');
+    const pg = ngang ? `<w:pgSz w:w="${W_TRANG}" w:h="${H_TRANG}" w:orient="landscape"/><w:pgMar w:top="${LE.tren}" w:right="${LE.phai}" w:bottom="${LE.duoi}" w:left="${LE.trai}" w:header="567" w:footer="567" w:gutter="0"/>`
+        : `<w:pgSz w:w="${H_TRANG}" w:h="${W_TRANG}"/><w:pgMar w:top="1134" w:right="851" w:bottom="1134" w:left="1701" w:header="680" w:footer="567" w:gutter="0"/>`;
+    const docXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document ${NS}><w:body>${than}
+<w:sectPr><w:headerReference w:type="default" r:id="rIdH1"/><w:headerReference w:type="first" r:id="rIdH2"/>${pg}<w:titlePg/></w:sectPr></w:body></w:document>`;
+    // Header: số trang là đoạn văn thường canh giữa, trường PAGE (không dùng khung/textbox), từ trang 2
+    const sz = '<w:rPr><w:sz w:val="28"/></w:rPr>';
+    const header1 = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr ${NS}><w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="0" w:after="0"/></w:pPr>
+<w:r>${sz}<w:fldChar w:fldCharType="begin"/></w:r><w:r>${sz}<w:instrText xml:space="preserve"> PAGE </w:instrText></w:r>
+<w:r>${sz}<w:fldChar w:fldCharType="separate"/></w:r><w:r>${sz}<w:t>2</w:t></w:r><w:r>${sz}<w:fldChar w:fldCharType="end"/></w:r></w:p></w:hdr>`;
+    const header2 = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:hdr ${NS}><w:p/></w:hdr>`;
+    const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="Times New Roman" w:cs="Times New Roman"/>
+<w:sz w:val="28"/><w:szCs w:val="28"/><w:lang w:val="vi-VN"/></w:rPr></w:rPrDefault>
+<w:pPrDefault><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>
+<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>
+<w:style w:type="table" w:default="1" w:styleId="TableNormal"><w:name w:val="Normal Table"/><w:tblPr><w:tblCellMar><w:left w:w="108" w:type="dxa"/><w:right w:w="108" w:type="dxa"/></w:tblCellMar></w:tblPr></w:style>
+</w:styles>`;
+    const zip = new JSZip();
+    zip.file('[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>
+<Override PartName="/word/header2.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>
+</Types>`);
+    zip.file('_rels/.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`);
+    zip.file('word/_rels/document.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rIdS" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+<Relationship Id="rIdH1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/>
+<Relationship Id="rIdH2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header2.xml"/></Relationships>`);
+    zip.file('word/document.xml', docXml);
+    zip.file('word/styles.xml', styles);
+    zip.file('word/header1.xml', header1);
+    zip.file('word/header2.xml', header2);
+    return zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+}
+
+async function word(o) {
     soHinh = 0;
     const wTrai = Math.round(W_VUNG * 0.4), wPhai = W_VUNG - wTrai;
 
@@ -117,51 +164,151 @@ ${o.dong.length ? o.dong.map(d => `<w:tr><w:trPr><w:cantSplit/></w:trPr>${d.map(
         { w: W_VUNG - Math.round(W_VUNG / 2), noiDung: cotKy(chucDanh, o.nguoiKy) },
     ]);
 
-    const NS = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" mc:Ignorable="w14"';
-    const docXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document ${NS}><w:body>${dau}${tieuDe}${bang}${ky}
-<w:sectPr><w:headerReference w:type="default" r:id="rIdH1"/><w:headerReference w:type="first" r:id="rIdH2"/>
-<w:pgSz w:w="${W_TRANG}" w:h="${H_TRANG}" w:orient="landscape"/>
-<w:pgMar w:top="${LE.tren}" w:right="${LE.phai}" w:bottom="${LE.duoi}" w:left="${LE.trai}" w:header="567" w:footer="567" w:gutter="0"/>
-<w:titlePg/></w:sectPr></w:body></w:document>`;
-
-    // Header: số trang là đoạn văn thường canh giữa, trường PAGE (không dùng khung/textbox)
-    const header1 = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:hdr ${NS}><w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="0" w:after="0"/></w:pPr>
-<w:r><w:rPr><w:sz w:val="28"/></w:rPr><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:rPr><w:sz w:val="28"/></w:rPr><w:instrText xml:space="preserve"> PAGE </w:instrText></w:r>
-<w:r><w:rPr><w:sz w:val="28"/></w:rPr><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:rPr><w:sz w:val="28"/></w:rPr><w:t>2</w:t></w:r><w:r><w:rPr><w:sz w:val="28"/></w:rPr><w:fldChar w:fldCharType="end"/></w:r></w:p></w:hdr>`;
-    const header2 = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:hdr ${NS}><w:p/></w:hdr>`;
-
-    const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="Times New Roman" w:cs="Times New Roman"/>
-<w:sz w:val="28"/><w:szCs w:val="28"/><w:lang w:val="vi-VN"/></w:rPr></w:rPrDefault>
-<w:pPrDefault><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>
-<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>
-<w:style w:type="table" w:default="1" w:styleId="TableNormal"><w:name w:val="Normal Table"/><w:tblPr><w:tblCellMar><w:left w:w="108" w:type="dxa"/><w:right w:w="108" w:type="dxa"/></w:tblCellMar></w:tblPr></w:style>
-</w:styles>`;
-    const zip = new JSZip();
-    zip.file('[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
-<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>
-<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
-<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
-<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>
-<Override PartName="/word/header2.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>
-</Types>`);
-    zip.file('_rels/.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`);
-    zip.file('word/_rels/document.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-<Relationship Id="rIdS" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
-<Relationship Id="rIdH1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/>
-<Relationship Id="rIdH2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header2.xml"/></Relationships>`);
-    zip.file('word/document.xml', docXml);
-    zip.file('word/styles.xml', styles);
-    zip.file('word/header1.xml', header1);
-    zip.file('word/header2.xml', header2);
-    const blob = await zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+    const blob = await taoDocx(`${dau}${tieuDe}${bang}${ky}`, { ngang: true });
     taiVe(blob, o.tenFile + '.docx');
+}
+
+
+// ─────────────────────────────────────────────────────────
+// VĂN BẢN NÂNG LƯƠNG: Quyết định, Tờ trình, Biên bản (A4 dọc)
+// Câu chữ chuyển từ van_ban_nang_luong.py của app nâng lương cũ.
+// ─────────────────────────────────────────────────────────
+const W_DOC = H_TRANG - 1701 - 851;                // vùng chữ khổ dọc
+const W_TRAI_DOC = 4252, W_PHAI_DOC = W_DOC - 4252; // 7,5 cm | phần còn lại
+const thangVB = t => { const n = Number(t); return n === 1 || n === 2 ? String(n).padStart(2, '0') : String(n); };
+const ngayVBTuISO = iso => { if (!iso) return ''; const [y, m, d] = iso.split('-'); return `${d}/${m}/${y}`; };
+const thangNamVB = iso => { if (!iso) return ''; const [y, m] = iso.split('-'); return `${thangVB(m)}/${y}`; };
+
+// Đoạn thân bài: căn đều, thụt đầu dòng 1 cm, giãn dòng 1,15, cách sau 6pt. doan: chuỗi hoặc [[chữ, {b,i,u}], ...]
+const runVB = (t, { b, i, u } = {}) =>
+    `<w:r><w:rPr>${b ? '<w:b/>' : ''}${i ? '<w:i/>' : ''}${u ? '<w:u w:val="single"/>' : ''}<w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr><w:t xml:space="preserve">${xml(t)}</w:t></w:r>`;
+const doanVB = (doan, { canh = 'both', thut = true, sau = 120, truoc = 0 } = {}) => {
+    const runs = typeof doan === 'string' ? runVB(doan) : doan.map(([t, o]) => runVB(t, o)).join('');
+    return `<w:p><w:pPr><w:spacing w:before="${truoc}" w:after="${sau}" w:line="276" w:lineRule="auto"/>${thut && canh === 'both' ? '<w:ind w:firstLine="567"/>' : ''}<w:jc w:val="${canh}"/></w:pPr>${runs}</w:p>`;
+};
+const giuaVB = (t, o = {}) => doanVB([[t, o]], { canh: 'center', thut: false, sau: 0 });
+const trongVB = () => '<w:p><w:pPr><w:spacing w:after="0"/></w:pPr></w:p>';
+
+// Phần đầu: [Tỉnh ủy / Ban / * / Số hiệu] | [ĐCSVN / đường kẻ / địa danh, ngày tháng]
+function dauVB({ soHieu, ngay, thang, nam }) {
+    const trai = giuaVB('TỈNH ỦY TUYÊN QUANG') + giuaVB('BAN TUYÊN GIÁO', { b: true }) + giuaVB('*') + (soHieu ? giuaVB(soHieu) : '');
+    const phai = giuaVB('ĐẢNG CỘNG SẢN VIỆT NAM', { b: true }) + duongKe(6.9)
+        + doanVB([[`Tuyên Quang, ngày ${ngay} tháng ${thangVB(thang)} năm ${nam}`, { i: true }]], { canh: 'center', thut: false, sau: 0, truoc: 60 });
+    return bangKhongVien([{ w: W_TRAI_DOC, noiDung: trai }, { w: W_PHAI_DOC, noiDung: phai }]).replace(`w:w="${W_VUNG}"`, `w:w="${W_DOC}"`);
+}
+const tenLoaiVB = (d1, d2) => trongVB() + giuaVB(d1, { b: true }) + (d2 ? giuaVB(d2, { b: true }) : '') + doanVB('-----', { canh: 'center', thut: false, sau: 200 });
+
+function khoiKyVB(noiNhan, chucDanh, ten) {
+    const trai = doanVB([['Nơi nhận:', { u: true }]], { canh: 'left', thut: false, sau: 0 })
+        + noiNhan.map(t => `<w:p><w:pPr><w:spacing w:after="0"/></w:pPr><w:r><w:rPr><w:sz w:val="24"/></w:rPr><w:t xml:space="preserve">- ${xml(t)}</w:t></w:r></w:p>`).join('');
+    const phai = String(chucDanh || '').split('\n').filter(Boolean).map(t => giuaVB(t.toUpperCase(), { b: true })).join('')
+        + trongVB() + trongVB() + trongVB() + giuaVB(ten || '', { b: true });
+    return bangKhongVien([{ w: W_TRAI_DOC, noiDung: trai }, { w: W_PHAI_DOC, noiDung: phai }]).replace(`w:w="${W_VUNG}"`, `w:w="${W_DOC}"`);
+}
+function kyHaiBenVB(t1, ten1, t2, ten2) {
+    const cot = (t, ten) => giuaVB(t, { b: true }) + trongVB() + trongVB() + trongVB() + giuaVB(ten || '', { b: true });
+    return bangKhongVien([{ w: Math.round(W_DOC / 2), noiDung: cot(t1, ten1) }, { w: W_DOC - Math.round(W_DOC / 2), noiDung: cot(t2, ten2) }]).replace(`w:w="${W_VUNG}"`, `w:w="${W_DOC}"`);
+}
+
+// Câu mô tả diễn biến lương của một người. r: { ngach, ma_ngach, bac_ht, hs_ht, ngay_ht (ISO), bac_moi, hs_moi, ngay_dk (ISO), vk_ht, vk_moi }
+function cauDienBien(r, loai, tachDoi = false) {
+    const ht = ngayVBTuISO(r.ngay_ht), dk = ngayVBTuISO(r.ngay_dk);
+    let d1, d2;
+    if (loai === 'vuot_khung') {
+        if (r.vk_ht) {
+            d1 = `Lương đang hưởng ngạch ${r.ngach} (Mã số ${r.ma_ngach}), bậc ${r.bac_ht}, hệ số ${r.hs_ht} và hưởng phụ cấp thâm niên vượt khung ${r.vk_ht}, kể từ ngày ${ht}.`;
+            d2 = `Nay nâng mức phụ cấp thâm niên vượt khung lên ${r.vk_moi}, kể từ ngày ${dk}.`;
+        } else {
+            d1 = `Lương đang hưởng ngạch ${r.ngach} (Mã số ${r.ma_ngach}) bậc ${r.bac_ht}; hệ số ${r.hs_ht} từ tháng ${thangNamVB(r.ngay_ht)}.`;
+            d2 = `Nay nâng phụ cấp thâm niên vượt khung lần đầu bằng ${r.vk_moi}, kể từ ngày ${dk}.`;
+        }
+    } else {
+        d1 = `Lương đang hưởng ngạch ${r.ngach} (Mã số ${r.ma_ngach}), bậc ${r.bac_ht}, hệ số ${r.hs_ht} từ tháng ${thangNamVB(r.ngay_ht)}.`;
+        d2 = `Nâng lên bậc ${r.bac_moi}, hệ số ${r.hs_moi} từ tháng ${thangNamVB(r.ngay_dk)}.`;
+    }
+    return tachDoi ? [d1, d2] : `${d1} ${d2}`;
+}
+
+// ch: cấu hình (căn cứ, Trưởng Ban, nơi nhận...), d: thông tin đợt (số, ngày ký, ngày họp...)
+async function quyetDinh(r, loai, ch, d) {
+    soHinh = 0;
+    const t = [];
+    t.push(dauVB({ soHieu: `Số ${d.soQD || '      '}-QĐ/BTGTU`, ngay: d.ngayKy, thang: d.thangKy, nam: d.namKy }));
+    t.push(tenLoaiVB('QUYẾT ĐỊNH', loai === 'thuong_xuyen' ? 'nâng lương thường xuyên đối với công chức' : 'nâng phụ cấp thâm niên vượt khung đối với công chức'));
+    t.push(doanVB(loai === 'thuong_xuyen' ? ch.can_cu_tx : ch.can_cu_vk));
+    t.push(doanVB(ch.can_cu_phan_cap));
+    t.push(doanVB(`Căn cứ Biên bản cuộc họp ngày ${d.ngayHopVN} của Hội đồng xét nâng bậc lương cơ quan Ban Tuyên giáo Tỉnh ủy;`));
+    t.push(doanVB('Xét đề nghị của Chánh Văn phòng Ban.'));
+    t.push(trongVB(), giuaVB('BAN TUYÊN GIÁO TỈNH ỦY', { b: true }), doanVB([['QUYẾT ĐỊNH', { b: true }]], { canh: 'center', thut: false, sau: 200 }));
+    t.push(doanVB([['Điều 1. ', { b: true }], [`Đồng chí ${r.ho_ten}${r.chuc_danh ? ', ' + r.chuc_danh : ''}. ${cauDienBien(r, loai)}`, {}]]));
+    t.push(doanVB(`Thời gian nâng bậc lương lần sau tính từ ngày ${ngayVBTuISO(r.ngay_dk)}.`));
+    const thiHanh = r.don_vi && /^Phòng /.test(r.don_vi) ? `${ch.phong_lien_quan}, ${r.don_vi}` : ch.phong_lien_quan;
+    t.push(doanVB([['Điều 2. ', { b: true }], [`${thiHanh} và đồng chí ${r.ho_ten} căn cứ Quyết định thi hành.`, {}]]));
+    t.push(trongVB(), khoiKyVB(ch.noi_nhan_qd, ch.chuc_danh_ky, ch.truong_ban));
+    return taoDocx(t.join(''));
+}
+
+async function toTrinh(dsNhom, loai, ch, d) {
+    soHinh = 0;
+    const hanhDong = loai === 'thuong_xuyen' ? 'nâng bậc lương thường xuyên' : 'nâng phụ cấp thâm niên vượt khung';
+    const t = [];
+    t.push(dauVB({ soHieu: `Số ${d.soTT || '      '}-TTr/BTGTU`, ngay: d.ngayKy, thang: d.thangKy, nam: d.namKy }));
+    t.push(tenLoaiVB('TỜ TRÌNH', `V/v đề nghị ${hanhDong}`));
+    t.push(doanVB([['Kính gửi: ', { i: true }], ['Ban Tổ chức Tỉnh ủy.', { b: true }]], { canh: 'left', thut: false, sau: 160 }).replace('<w:jc w:val="left"/>', '<w:ind w:firstLine="567"/><w:jc w:val="left"/>'));
+    t.push(doanVB(`${loai === 'vuot_khung' ? ch.can_cu_vk : ch.can_cu_tx} ${ch.can_cu_phan_cap} ${ch.can_cu_cong_van}`));
+    t.push(doanVB(`Căn cứ kết quả đánh giá xếp loại cán bộ, công chức năm ${Number(d.namKy) - 1}; Biên bản cuộc họp Hội đồng xét nâng lương của Ban Tuyên giáo Tỉnh ủy ngày ${d.ngayHopVN};`));
+    if (dsNhom.length === 1) {
+        const r = dsNhom[0];
+        t.push(doanVB(`Ban Tuyên giáo Tỉnh ủy đề nghị Ban Tổ chức Tỉnh ủy thẩm định, trình Thường trực Tỉnh ủy xem xét Quyết định ${hanhDong} cho đồng chí ${r.ho_ten}${r.chuc_danh ? ', ' + r.chuc_danh : ''}.`));
+        t.push(doanVB(cauDienBien(r, loai)));
+    } else {
+        t.push(doanVB(`Ban Tuyên giáo Tỉnh ủy đề nghị Ban Tổ chức Tỉnh ủy thẩm định, trình Thường trực Tỉnh ủy xem xét, Quyết định ${hanhDong} cho các đồng chí có tên sau:`));
+        dsNhom.forEach((r, i) => t.push(doanVB(`${i + 1}. Đồng chí ${r.ho_ten}${r.chuc_danh ? ', ' + r.chuc_danh : ''}. ${cauDienBien(r, loai)}`)));
+    }
+    t.push(doanVB([['(Có Biên bản họp xét kèm theo)', { i: true }]], { canh: 'center', thut: false }));
+    t.push(doanVB('Ban Tuyên giáo Tỉnh ủy trân trọng đề nghị Ban Tổ chức Tỉnh ủy trình Thường trực Tỉnh ủy xem xét, quyết định.'));
+    t.push(trongVB(), khoiKyVB(ch.noi_nhan_tt, ch.chuc_danh_ky, ch.truong_ban));
+    return taoDocx(t.join(''));
+}
+
+async function bienBan(dsNhom, loai, laLanhDao, ch, d) {
+    soHinh = 0;
+    const hanhDong = loai === 'thuong_xuyen' ? 'nâng bậc lương thường xuyên' : 'nâng phụ cấp thâm niên vượt khung';
+    const canCu = loai === 'thuong_xuyen' ? ch.can_cu_tx : ch.can_cu_vk;
+    const canCuNgan = canCu.replace(/^Căn cứ /, '');
+    const [nh, th, nm] = d.ngayHopISO.split('-').reverse();
+    const ten = r => `đồng chí ${r.ho_ten}${r.chuc_danh ? ', ' + r.chuc_danh : ''}`;
+    const t = [];
+    t.push(dauVB({ ngay: nh, thang: th, nam: nm }));
+    t.push(tenLoaiVB('BIÊN BẢN', `Họp xét ${hanhDong} cho cán bộ, công chức`));
+    t.push(doanVB(dsNhom.length === 1
+        ? `Vào hồi ${d.gioBatDau} phút, ngày ${d.ngayHopVN} tại ${ch.dia_diem} họp xét ${hanhDong} cho ${ten(dsNhom[0])}.`
+        : `Vào hồi ${d.gioBatDau} phút, ngày ${d.ngayHopVN} tại ${ch.dia_diem} họp xét ${hanhDong} cho ${String(dsNhom.length).padStart(2, '0')} công chức, gồm: ${dsNhom.map(ten).join('; ')}.`));
+    t.push(doanVB([['I- THÀNH PHẦN', { b: true }]]));
+    String(ch.thanh_phan || '').split('\n').map(x => x.trim().replace(/^-\s*/, '')).filter(Boolean).forEach(x => t.push(doanVB(`- ${x}`, { sau: 60 })));
+    t.push(doanVB([['II- NỘI DUNG', { b: true }]]));
+    t.push(doanVB([['1. ', { b: true }], [`Đồng chí chủ trì thông qua ${canCuNgan}`, {}]]));
+    t.push(doanVB([['2. ', { b: true }], [`Hội đồng tiến hành rà soát tiêu chuẩn, điều kiện ${hanhDong}, đồng thời đối chiếu với kết quả nhận xét, đánh giá cán bộ năm ${Number(nm) - 1} ${dsNhom.length === 1 ? `của đồng chí ${dsNhom[0].ho_ten}` : 'của các đồng chí có tên trên'}.`, {}]]));
+    const ketLuan = laLanhDao
+        ? 'Hội đồng xét nâng lương Ban Tuyên giáo Tỉnh ủy biểu quyết thống nhất đề nghị Ban Tổ chức Tỉnh ủy thẩm định, trình Thường trực Tỉnh ủy xem xét, Quyết định'
+        : 'Hội đồng xét nâng lương Ban Tuyên giáo Tỉnh ủy biểu quyết thống nhất đề nghị Trưởng Ban Quyết định';
+    if (dsNhom.length === 1) {
+        t.push(doanVB(`Sau khi thảo luận, xem xét, ${ketLuan} ${hanhDong} cho ${ten(dsNhom[0])}, cụ thể như sau:`));
+        cauDienBien(dsNhom[0], loai, true).forEach(x => t.push(doanVB(x)));
+    } else {
+        t.push(doanVB(`Sau khi thảo luận, xem xét, ${ketLuan} ${hanhDong} cho các đồng chí có tên sau, cụ thể như sau:`));
+        dsNhom.forEach((r, i) => t.push(doanVB([[`${i + 1}. `, { b: true }], [`Đồng chí ${r.ho_ten}${r.chuc_danh ? ', ' + r.chuc_danh : ''}. ${cauDienBien(r, loai)}`, {}]])));
+    }
+    t.push(doanVB(`Cuộc họp kết thúc vào hồi ${d.gioKetThuc} phút cùng ngày. Biên bản đã được thông qua trước Hội đồng và được 100% thành viên nhất trí.`));
+    t.push(trongVB(), kyHaiBenVB('THƯ KÝ', ch.thu_ky, 'CHỦ TRÌ', ch.truong_ban));
+    return taoDocx(t.join(''));
+}
+
+async function nenZip(dsFile, tenZip) {
+    const JSZip = await napThuVien(URL_JSZIP, 'JSZip');
+    const z = new JSZip();
+    dsFile.forEach(f => z.file(f.ten, f.blob));
+    taiVe(await z.generateAsync({ type: 'blob' }), tenZip);
 }
 
 // ─────────────────────────────────────────────────────────
@@ -233,5 +380,5 @@ async function excel(o) {
     taiVe(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), o.tenFile + '.xlsx');
 }
 
-window.XuatFile = { word, excel, ngayThangNam };
+window.XuatFile = { word, excel, ngayThangNam, taiVe, nenZip, nangLuong: { quyetDinh, toTrinh, bienBan } };
 })();

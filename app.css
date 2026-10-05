@@ -136,6 +136,7 @@ table.bang { width: 100%; border-collapse: collapse; font-size: 14px; }
 
 .the-nho { white-space: nowrap; display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; background: var(--vien-nhat); color: var(--muc-2); }
 .the-nho.do { background: var(--do-nhat); color: var(--do); }
+.the-nho.vang { background: var(--vang-nhat); color: #8A5A00; }
 .the-nho.xanh { background: var(--xanh-nhat); color: var(--xanh); }
 
 /* Ảnh nhỏ trong danh sách */
@@ -291,7 +292,8 @@ details.tam > summary::marker { color: var(--do); }
         background: var(--giay); border-top: 1px solid var(--vien);
         padding-bottom: env(safe-area-inset-bottom, 0px);
     }
-    .thanh-duoi a { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px; font-size: 11.5px; color: var(--muc-2); text-decoration: none; }
+    .thanh-duoi a span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+    .thanh-duoi a { min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px; font-size: 11.5px; color: var(--muc-2); text-decoration: none; }
     .thanh-duoi a svg { width: 22px; height: 22px; }
     .thanh-duoi a.dang-mo { color: var(--do); font-weight: 600; }
     .chinh { padding: 18px 14px calc(96px + env(safe-area-inset-bottom, 0px)); }
