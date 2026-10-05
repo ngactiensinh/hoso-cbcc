@@ -129,11 +129,12 @@ table.bang { width: 100%; border-collapse: collapse; font-size: 14px; }
 .chi-so { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 14px; margin-bottom: 18px; }
 .chi-so a { display: block; text-decoration: none; color: inherit; background: var(--giay); border: 1px solid var(--vien); border-radius: var(--r); padding: 16px 18px; }
 .chi-so a:hover { border-color: var(--muc); }
+.chi-so.bon { grid-template-columns: repeat(4, minmax(0,1fr)); }
 .chi-so b { display: block; font-family: var(--serif); font-size: 34px; line-height: 1.1; color: var(--muc); }
 .chi-so a.can-xu-ly b { color: var(--do); }
 .chi-so span { color: var(--muc-2); font-size: 14px; }
 
-.the-nho { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; background: var(--vien-nhat); color: var(--muc-2); }
+.the-nho { white-space: nowrap; display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; background: var(--vien-nhat); color: var(--muc-2); }
 .the-nho.do { background: var(--do-nhat); color: var(--do); }
 .the-nho.xanh { background: var(--xanh-nhat); color: var(--xanh); }
 
@@ -215,8 +216,24 @@ table.bang { width: 100%; border-collapse: collapse; font-size: 14px; }
 }
 .thanh-luu span { color: var(--mo); font-size: 14px; }
 
+/* Dashboard */
+.luoi-bd { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 18px; }
+.luoi-bd .rong { grid-column: 1 / -1; }
+.khung-bd { position: relative; height: 260px; }
+.khung-bd.cao { height: 300px; }
+
+/* Mốc sắp tới trên bìa hồ sơ */
+.moc { list-style: none; margin: 16px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 10px; }
+.moc li { flex: 1 1 220px; border: 1px solid var(--vien); border-left: 3px solid var(--muc); border-radius: 6px; padding: 8px 12px; background: #fff; text-align: left; }
+.moc li.gan { border-left-color: var(--do); background: var(--do-nhat); }
+.moc span { display: block; font-size: 12px; color: var(--mo); }
+.moc b { font-family: var(--serif); font-size: 18px; }
+.moc small { display: block; color: var(--muc-2); font-size: 13px; }
+
+details.tam > summary::marker { color: var(--do); }
+
 /* ── Màn hình đăng nhập ──────────────────────────────── */
-.dang-nhap { min-height: 100vh; min-height: 100dvh; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 480px); }
+.dang-nhap { min-height: 100vh; min-height: 100dvh; display: grid; grid-template-columns: minmax(0, 1fr) minmax(380px, 42%); }
 .dn-trai {
     background: var(--giay); border-right: 1px solid var(--vien);
     display: flex; flex-direction: column; justify-content: center; padding: 48px 56px;
@@ -227,6 +244,8 @@ table.bang { width: 100%; border-collapse: collapse; font-size: 14px; }
 .dn-trai h1 { font-family: var(--serif); font-size: 40px; line-height: 1.15; margin: 8px 0 14px; max-width: 14ch; }
 .dn-trai p { color: var(--muc-2); max-width: 46ch; margin: 0; }
 .dn-phai { display: flex; flex-direction: column; justify-content: center; padding: 40px; }
+.dn-noi { width: 100%; max-width: 560px; margin: 0 auto; }
+.dn-phai .dn-noi { max-width: 420px; }
 .dn-phai form { display: flex; flex-direction: column; gap: 14px; }
 .dn-phai .tab { margin-bottom: 18px; }
 .loi { background: var(--do-nhat); color: var(--do-dam); border-left: 3px solid var(--do); padding: 10px 12px; border-radius: 4px; font-size: 14px; }
@@ -250,6 +269,8 @@ table.bang { width: 100%; border-collapse: collapse; font-size: 14px; }
 /* ── Điện thoại & máy tính bảng ──────────────────────── */
 @media (max-width: 1000px) {
     .luoi-o, .muc-xem, .bia dl { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    .chi-so.bon { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    .luoi-bd { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 860px) {
     .khung { grid-template-columns: minmax(0, 1fr); }
@@ -275,7 +296,7 @@ table.bang { width: 100%; border-collapse: collapse; font-size: 14px; }
     .thanh-duoi a.dang-mo { color: var(--do); font-weight: 600; }
     .chinh { padding: 18px 14px calc(96px + env(safe-area-inset-bottom, 0px)); }
     .dau-trang h1 { font-size: 22px; }
-    .chi-so { grid-template-columns: 1fr; }
+    .chi-so, .chi-so.bon { grid-template-columns: 1fr; }
     .chi-so a { display: flex; align-items: baseline; gap: 12px; }
     .chi-so b { font-size: 28px; }
 

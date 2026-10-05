@@ -1,5 +1,5 @@
 /* =====================================================================
-   HỒ SƠ CBCC — BAN TUYÊN GIÁO TỈNH ỦY TUYÊN QUANG  (v8.0 — Giai đoạn 1)
+   HỒ SƠ CBCC — BAN TUYÊN GIÁO TỈNH ỦY TUYÊN QUANG  (v8.1 — Giai đoạn 2)
    GitHub Pages + Supabase (Auth + RLS)
    ===================================================================== */
 'use strict';
@@ -147,6 +147,9 @@ const BANG_CON = {
         ['ngay_quyet_dinh', 'Ngày quyết định', 'ngay'],
         ['loai', 'Loại', 'chon', { ds: ['Khen thưởng', 'Kỷ luật'], bat: 1 }],
         ['quyet_dinh_so', 'Quyết định số'],
+        ['he_thong', 'Kỷ luật theo', 'chon', { ds: ['Chính quyền', 'Đảng'], kl: 1 }],
+        ['hinh_thuc', 'Hình thức kỷ luật', 'chon', { ds: ['Khiển trách', 'Cảnh cáo', 'Hạ bậc lương', 'Giáng chức', 'Cách chức', 'Buộc thôi việc', 'Khai trừ'], kl: 1 }],
+        ['ngay_het_han', 'Hết thời hạn kỷ luật', 'ngay', { kl: 1, goiY: 'Tự gợi ý theo hình thức, sửa được' }],
         ['noi_dung', 'Nội dung', 'van', { rong: 1 }],
     ]},
 };
@@ -188,6 +191,7 @@ function dichLoi(e) {
     if (/duplicate key/i.test(m)) return 'Dữ liệu bị trùng: mã này đã tồn tại.';
     if (/Failed to fetch|NetworkError|Load failed/i.test(m)) return 'Không kết nối được máy chủ. Kiểm tra mạng rồi thử lại.';
     if (/JWT|token is expired|refresh token/i.test(m)) return 'Phiên đăng nhập đã hết hạn. Tải lại trang để đăng nhập lại.';
+    if (/hs_nang_luong|hs_ghep_luong|hs_dong_bo|he_thong|hinh_thuc|ngay_het_han/.test(m) && /does not exist|Could not find|schema cache/i.test(m)) return 'Chưa chạy file sql/02_giai_doan_2.sql trong Supabase.';
     if (/row-level security|permission denied/i.test(m)) return 'Tài khoản không có quyền thực hiện thao tác này.';
     if (/Email signups are disabled|Signups not allowed/i.test(m)) return 'Hệ thống đang tạm khóa đăng ký mới. Liên hệ quản trị viên.';
     return m || 'Có lỗi xảy ra.';
@@ -201,7 +205,7 @@ function thongBao(msg, loi = false) {
     setTimeout(() => el.remove(), loi ? 5000 : 3000);
 }
 
-function hopThoai({ tieuDe, noiDung = '', nutChinh = 'Lưu', nutPhu = 'Hủy', xuLy }) {
+function hopThoai({ tieuDe, noiDung = '', nutChinh = 'Lưu', nutPhu = 'Hủy', xuLy, sauKhiMo }) {
     return new Promise(res => {
         const phu = document.createElement('div');
         phu.className = 'phu';
@@ -229,6 +233,7 @@ function hopThoai({ tieuDe, noiDung = '', nutChinh = 'Lưu', nutPhu = 'Hủy', x
                 loi.textContent = dichLoi(err); loi.classList.remove('an'); nut.disabled = false;
             }
         });
+        if (sauKhiMo) sauKhiMo(form, dong);
         ($('input,select,textarea', form) || $('[type=submit]', form)).focus();
     });
 }
@@ -334,6 +339,7 @@ const ICON = {
     tk: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5M16 4.5a3.5 3.5 0 0 1 0 7M18 14.8c1.9.7 3.1 2.4 3.5 5.2"/></svg>',
     hs: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 4h10l6 6v10H4z"/><path d="M14 4v6h6"/><circle cx="10" cy="13" r="2"/><path d="M7 18c.5-1.6 1.6-2.4 3-2.4s2.5.8 3 2.4"/></svg>',
     mk: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>',
+    cb: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg>',
     ra: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></svg>',
 };
 
@@ -344,13 +350,13 @@ function manDangNhap(loi = '', tb = '') {
     S.session = null; S.tk = null; S.ds = null; S.anh = {};
     goc.innerHTML = `
     <div class="dang-nhap">
-        <section class="dn-trai">
+        <section class="dn-trai"><div class="dn-noi">
             <img src="logo.png" alt="Biểu trưng ngành Tuyên giáo">
             <small>Ban Tuyên giáo Tỉnh ủy Tuyên Quang</small>
             <h1>Hồ sơ cán bộ, công chức</h1>
             <p>Cán bộ tự khai và cập nhật hồ sơ của mình theo Mẫu 2C-BNV/2008. Văn phòng Ban theo dõi, tổng hợp toàn bộ hồ sơ của cơ quan.</p>
-        </section>
-        <section class="dn-phai">
+        </div></section>
+        <section class="dn-phai"><div class="dn-noi">
             <div class="tab" role="tablist">
                 <button type="button" role="tab" aria-selected="true" data-tab="dn">Đăng nhập</button>
                 <button type="button" role="tab" aria-selected="false" data-tab="dk">Đăng ký tài khoản</button>
@@ -379,7 +385,7 @@ function manDangNhap(loi = '', tb = '') {
                 <button class="nut nut-chinh" type="submit">Gửi yêu cầu đăng ký</button>
                 <small style="color:var(--mo)">Tài khoản dùng được sau khi quản trị viên phê duyệt.</small>
             </form>
-        </section>
+        </div></section>
     </div>`;
 
     $$('[data-tab]').forEach(b => b.addEventListener('click', () => {
@@ -453,6 +459,7 @@ function mucMenu() {
     return S.admin ? [
         { id: 'tong-quan', n: 'Tổng quan', i: ICON.tq },
         { id: 'danh-sach', n: 'Danh sách', i: ICON.ds },
+        { id: 'canh-bao', n: 'Cảnh báo', i: ICON.cb },
         { id: 'tai-khoan', n: 'Tài khoản', i: ICON.tk, dem: true },
         { id: 'cua-toi', n: 'Hồ sơ của tôi', i: ICON.hs },
     ] : [
@@ -501,6 +508,7 @@ async function dinhTuyen() {
     const [p0, p1, p2] = duong.split('/');
     const dangMo = (p0 === 'ho-so' && p1 === S.hoSoCuaToi) ? 'cua-toi' : (p0 === 'ho-so' ? 'danh-sach' : p0);
     $$('[data-m]').forEach(a => a.classList.toggle('dang-mo', a.dataset.m === dangMo));
+    huyBieuDo();
     const trang = $('#trang');
     trang.innerHTML = '<div class="dang-tai">Đang tải…</div>';
     window.scrollTo(0, 0);
@@ -508,6 +516,7 @@ async function dinhTuyen() {
         if (p0 === 'tong-quan' && S.admin) await trangTongQuan(trang);
         else if (p0 === 'danh-sach' && S.admin) await trangDanhSach(trang);
         else if (p0 === 'tai-khoan' && S.admin) await trangTaiKhoan(trang);
+        else if (p0 === 'canh-bao' && S.admin) await trangCanhBao(trang);
         else if (p0 === 'ho-so' && p1) await (p2 === 'sua' ? trangSua(trang, p1) : trangHoSo(trang, p1));
         else if (p0 === 'doi-mat-khau') trangDoiMatKhau(trang);
         else if (S.hoSoCuaToi) await trangHoSo(trang, S.hoSoCuaToi);
@@ -553,45 +562,446 @@ async function gangAnhNho(vung, ds) {
 }
 
 // ─────────────────────────────────────────────────────────
-// 7. TRANG TỔNG QUAN (Admin)
+// 7. TÍNH TOÁN DÙNG CHUNG: nghỉ hưu, thời hạn, phân nhóm
+// ─────────────────────────────────────────────────────────
+const homNayISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+const congThang = (iso, n) => { const [y, m, d] = iso.split('-').map(Number); const t = new Date(y, m - 1 + n, 1); const cuoi = new Date(t.getFullYear(), t.getMonth() + 1, 0).getDate(); return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(Math.min(d, cuoi)).padStart(2, '0')}`; };
+const soNgayDen = iso => Math.round((new Date(iso + 'T00:00:00') - new Date(homNayISO() + 'T00:00:00')) / 864e5);
+const chuTuoi = t => `${Math.floor(t / 12)} tuổi${t % 12 ? ` ${t % 12} tháng` : ''}`;
+
+// Tuổi nghỉ hưu theo lộ trình Nghị định 135/2020/NĐ-CP. Thời điểm nghỉ hưu: ngày 01 của tháng liền sau tháng đủ tuổi.
+function nghiHuu(ngaySinh, gioiTinh) {
+    if (!ngaySinh || !['Nam', 'Nữ'].includes(gioiTinh)) return null;
+    const [y, m] = String(ngaySinh).split('-').map(Number);
+    const nam = gioiTinh === 'Nam';
+    const can = Y => Y <= 2020 ? (nam ? 720 : 660) : nam ? Math.min(720 + 3 * (Y - 2020), 744) : Math.min(660 + 4 * (Y - 2020), 720);
+    for (let Y = 2020; Y <= 2100; Y++) {
+        const thangDu = y * 12 + (m - 1) + can(Y);
+        if (Math.floor(thangDu / 12) <= Y) {
+            const t = thangDu + 1;
+            return { tuoi: can(Y), ngay: `${Math.floor(t / 12)}-${String(t % 12 + 1).padStart(2, '0')}-01` };
+        }
+    }
+    return null;
+}
+
+// Thời hạn kỷ luật gợi ý (tháng). Chính quyền: Luật CBCC sửa đổi 2019, Điều 82. Đảng: theo hướng dẫn hiện hành — Admin sửa được.
+const THOI_HAN_KL = {
+    'Chính quyền': { 'Khiển trách': 12, 'Cảnh cáo': 12, 'Hạ bậc lương': 12, 'Giáng chức': 24, 'Cách chức': 24, 'Buộc thôi việc': null },
+    'Đảng': { 'Khiển trách': 12, 'Cảnh cáo': 30, 'Cách chức': 60, 'Khai trừ': null },
+};
+
+function trongKhoang(iso, khoang) {
+    if (!iso) return false;
+    if (khoang === 'tat-ca') return true;
+    const hn = homNayISO();
+    if (khoang === 'qua-han') return iso < hn;
+    if (/^q\d+$/.test(khoang)) return iso <= congThang(hn, Number(khoang.slice(1)));
+    if (khoang.startsWith('nam-')) return iso.startsWith(khoang.slice(4));
+    return true;
+}
+const moTaKhoang = khoang => {
+    const hn = homNayISO();
+    if (khoang === 'tat-ca') return '';
+    if (khoang === 'qua-han') return `(Các trường hợp đã quá hạn tính đến ngày ${ngayVN(hn)})`;
+    if (/^q\d+$/.test(khoang)) return `(Từ nay đến ngày ${ngayVN(congThang(hn, Number(khoang.slice(1))))}, kể cả trường hợp đã quá hạn)`;
+    if (khoang.startsWith('nam-')) return `(Năm ${khoang.slice(4)})`;
+    return '';
+};
+
+function phanLoaiTrinhDo(r) {
+    const hv = boDau(r.hoc_vi), cm = boDau(r.trinh_do_chuyen_mon);
+    if (/tien si/.test(hv) || /tien si/.test(cm)) return 'Tiến sĩ';
+    if (/thac s[iy]/.test(hv) || /thac s[iy]/.test(cm)) return 'Thạc sĩ';
+    if (/dai hoc|cu nhan|ky su|bac si/.test(cm + ' ' + hv)) return 'Đại học';
+    if (/cao dang/.test(cm)) return 'Cao đẳng';
+    if (/trung cap/.test(cm)) return 'Trung cấp';
+    if (/so cap/.test(cm)) return 'Sơ cấp';
+    return trong(r.trinh_do_chuyen_mon) ? 'Chưa khai' : 'Khác';
+}
+const nhomTuoi = t => t === null ? 'Chưa khai' : t < 30 ? 'Dưới 30' : t <= 40 ? '30–40' : t <= 50 ? '41–50' : t <= 60 ? '51–60' : 'Trên 60';
+const nhomHeSo = h => h === null || h === undefined ? 'Chưa có' : h < 3 ? 'Dưới 3,0' : h < 4 ? '3,0–3,99' : h < 5 ? '4,0–4,99' : h < 6 ? '5,0–5,99' : 'Từ 6,0';
+
+const TEN_NGACH = { CVCC: 'Chuyên viên cao cấp', CVC: 'Chuyên viên chính', CV: 'Chuyên viên' };
+const chuanNgach = t => { if (trong(t)) return null; const k = String(t).trim(); return TEN_NGACH[k.toUpperCase()] || k.charAt(0).toUpperCase() + k.slice(1); };
+
+function gomNhom(ds, layNhan, thuTu = null, giuTrong = false) {
+    const m = new Map();
+    (thuTu || []).forEach(k => m.set(k, []));
+    ds.forEach(r => { const k = layNhan(r) || 'Chưa khai'; if (!m.has(k)) m.set(k, []); m.get(k).push(r); });
+    if (!thuTu) return new Map([...m].sort((a, b) => (a[0] === 'Chưa khai') - (b[0] === 'Chưa khai') || b[1].length - a[1].length));
+    return giuTrong ? m : new Map([...m].filter(([, v]) => v.length));
+}
+
+async function napToanBo() {
+    const [ds, nl, kt] = await Promise.all([
+        napDanhSach(true),
+        sb.from('hs_nang_luong').select('*').then(r => { if (r.error) throw r.error; return r.data; }),
+        q(sb.from('hs_khen_thuong').select('*')),
+    ]);
+    const theoId = Object.fromEntries(ds.map(r => [r.id, r]));
+    const nlTheoHs = {};
+    nl.forEach(r => { if (r.ho_so_id) nlTheoHs[r.ho_so_id] = r; });
+    ds.forEach(r => {
+        r._tuoi = tuoi(r.ngay_sinh);
+        r._nh = nghiHuu(r.ngay_sinh, r.gioi_tinh);
+        r._nl = nlTheoHs[r.id] || null;
+        r._heSo = r._nl?.he_so ?? r.he_so_luong ?? null;
+    });
+    kt.forEach(k => { k._hs = theoId[k.ho_so_id]; });
+    const hn = homNayISO();
+    const klConHan = kt.filter(k => k.loai === 'Kỷ luật' && k._hs && k.ngay_het_han && k.ngay_het_han >= hn);
+    return { ds, nl, kt, theoId, klConHan };
+}
+
+// ─────────────────────────────────────────────────────────
+// 8. BIỂU ĐỒ
+// ─────────────────────────────────────────────────────────
+const MAU = ['#C8102E', '#0D1B2A', '#F5A623', '#5B6B80', '#8E1B2E', '#E8C47A', '#2F7D4A', '#9AA3AE', '#C9B99A'];
+S.bieuDo = [];
+function huyBieuDo() { S.bieuDo.forEach(c => c.destroy()); S.bieuDo = []; }
+
+function veBieuDo(canvas, { kieu, nhom, ngang = false, nhanBo = null, xepChong = false }, moDanhSach) {
+    if (!window.Chart) { canvas.replaceWith(Object.assign(document.createElement('p'), { className: 'trong', textContent: 'Không tải được thư viện biểu đồ. Kiểm tra mạng rồi tải lại trang.' })); return; }
+    const nhan = [...nhom.keys()];
+    const boDuLieu = nhanBo
+        ? nhanBo.map((b, i) => ({ label: b.n, data: nhan.map(k => nhom.get(k).filter(b.loc).length), backgroundColor: b.mau || MAU[i], borderRadius: 3 }))
+        : [{ data: nhan.map(k => nhom.get(k).length),
+             backgroundColor: kieu === 'doughnut' ? nhan.map((k, i) => k === 'Chưa khai' || k === 'Chưa có' ? '#D9D2BF' : MAU[i % MAU.length]) : nhan.map(k => k === 'Chưa khai' || k === 'Chưa có' ? '#D9D2BF' : '#C8102E'),
+             borderColor: kieu === 'doughnut' ? '#FFFDF7' : undefined, borderWidth: kieu === 'doughnut' ? 2 : 0, borderRadius: kieu === 'doughnut' ? 0 : 3 }];
+    const c = new Chart(canvas, {
+        type: kieu,
+        data: { labels: nhan, datasets: boDuLieu },
+        options: {
+            responsive: true, maintainAspectRatio: false, indexAxis: ngang ? 'y' : 'x',
+            animation: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? false : { duration: 500 },
+            cutout: kieu === 'doughnut' ? '58%' : undefined,
+            plugins: {
+                legend: { display: kieu === 'doughnut' || !!nhanBo, position: kieu === 'doughnut' ? 'right' : 'top',
+                    labels: { boxWidth: 12, font: { family: 'Be Vietnam Pro', size: 12 }, color: '#3A4656' } },
+                tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label ? ctx.dataset.label + ': ' : ''}${ctx.raw} người` } },
+            },
+            scales: kieu === 'doughnut' ? {} : {
+                x: { stacked: xepChong, grid: { display: ngang }, ticks: { font: { family: 'Be Vietnam Pro', size: 11 }, color: '#3A4656', precision: 0 } },
+                y: { stacked: xepChong, grid: { display: !ngang, color: '#EEE5CB' }, ticks: { font: { family: 'Be Vietnam Pro', size: 11 }, color: '#3A4656', precision: 0 } },
+            },
+            onHover: (e, el) => { e.native.target.style.cursor = el.length ? 'pointer' : 'default'; },
+            onClick: (e, el) => {
+                if (!el.length || !moDanhSach) return;
+                const k = nhan[el[0].index];
+                const b = nhanBo ? nhanBo[el[0].datasetIndex] : null;
+                moDanhSach(b ? `${k} — ${b.n}` : k, b ? nhom.get(k).filter(b.loc) : nhom.get(k));
+            },
+        },
+    });
+    S.bieuDo.push(c);
+}
+
+function hopDanhSach(tieuDe, ds, moTa = r => r.chuc_vu || '') {
+    hopThoai({
+        tieuDe: `${tieuDe} (${ds.length})`, nutPhu: '', nutChinh: 'Đóng',
+        noiDung: ds.length ? `<div class="cuon-ngang"><table class="bang"><tbody>${ds.map((r, i) => {
+            const h = r._hs || r;
+            return `<tr><td class="so">${i + 1}</td><td><a href="#/ho-so/${h.id}" data-dong>${esc(h.ho_ten)}</a><br><small style="color:var(--mo)">${esc(moTa(r))}</small></td><td>${esc(h.don_vi || '')}</td></tr>`;
+        }).join('')}</tbody></table></div>` : '<p class="trong">Không có ai.</p>',
+        sauKhiMo: (form, dong) => $$('[data-dong]', form).forEach(a => a.addEventListener('click', () => dong(null))),
+    });
+}
+
+// ─────────────────────────────────────────────────────────
+// 9. TRANG TỔNG QUAN — DASHBOARD (Admin)
 // ─────────────────────────────────────────────────────────
 async function trangTongQuan(trang) {
-    const [ds, choDuyet] = await Promise.all([
-        napDanhSach(true),
-        q(sb.from('hs_tai_khoan').select('user_id').eq('trang_thai', 'Chờ duyệt')),
-    ]);
-    const chuaDu = ds.filter(r => r._ht.p < 80);
-    const theoDv = DS_DON_VI.map(dv => {
-        const n = ds.filter(r => r.don_vi === dv);
-        return { dv, so: n.length, tb: n.length ? Math.round(n.reduce((s, r) => s + r._ht.p, 0) / n.length) : 0 };
-    }).filter(x => x.so);
-    const khac = ds.filter(r => !DS_DON_VI.includes(r.don_vi));
-    if (khac.length) theoDv.push({ dv: 'Chưa xếp đơn vị', so: khac.length, tb: Math.round(khac.reduce((s, r) => s + r._ht.p, 0) / khac.length) });
-    const canBoSung = [...ds].sort((a, b) => a._ht.p - b._ht.p).slice(0, 12).filter(r => r._ht.p < 100);
+    let du;
+    try { du = await napToanBo(); }
+    catch (e) { if (/hs_nang_luong/.test(e.message || '')) throw new Error('Chưa chạy file sql/02_giai_doan_2.sql trong Supabase.'); throw e; }
+    const { ds, kt, klConHan } = du;
+    const choDuyet = await q(sb.from('hs_tai_khoan').select('user_id').eq('trang_thai', 'Chờ duyệt'));
+    const nam = ds.filter(r => r.gioi_tinh === 'Nam').length, nu = ds.filter(r => r.gioi_tinh === 'Nữ').length;
+    const dangVien = ds.filter(r => r.ngay_vao_dang);
+    const coTuoi = ds.filter(r => r._tuoi !== null);
+    const tuoiBQ = coTuoi.length ? (coTuoi.reduce((s, r) => s + r._tuoi, 0) / coTuoi.length).toFixed(1).replace('.', ',') : '—';
+    const hn = homNayISO();
+    const canNL = ds.filter(r => r._nl?.ngay_du_kien && trongKhoang(r._nl.ngay_du_kien, 'q3')).length;
+    const canNH = ds.filter(r => r._nh && r._nh.ngay >= hn && trongKhoang(r._nh.ngay, 'q12')).length;
+    const pct = (a, b) => b ? Math.round(a / b * 100) : 0;
+    const canBoSung = [...ds].sort((a, b) => a._ht.p - b._ht.p).filter(r => r._ht.p < 80).slice(0, 10);
 
     trang.innerHTML = `
-    <div class="dau-trang"><div><h1>Tổng quan hồ sơ</h1><p>Cập nhật lúc ${new Date().toLocaleString('vi-VN')}</p></div></div>
-    <div class="chi-so">
-        <a href="#/danh-sach"><b>${ds.length}</b><span>hồ sơ cán bộ, công chức</span></a>
-        <a href="#/tai-khoan" class="${choDuyet.length ? 'can-xu-ly' : ''}"><b>${choDuyet.length}</b><span>tài khoản đang chờ duyệt</span></a>
-        <a href="#/danh-sach" data-loc-chua class="${chuaDu.length ? 'can-xu-ly' : ''}"><b>${chuaDu.length}</b><span>hồ sơ khai dưới 80%</span></a>
+    <div class="dau-trang"><div><h1>Tổng quan cán bộ, công chức</h1><p>Số liệu lúc ${new Date().toLocaleString('vi-VN')}. Bấm vào cột hoặc phần biểu đồ để xem danh sách.</p></div>
+        ${choDuyet.length ? `<a class="nut" href="#/tai-khoan">${choDuyet.length} tài khoản chờ duyệt</a>` : ''}</div>
+    <div class="chi-so bon">
+        <a href="#/danh-sach"><b>${ds.length}</b><span>cán bộ, công chức (${nam} nam, ${nu} nữ)</span></a>
+        <a href="#/tong-quan" data-xem="dang"><b>${dangVien.length}</b><span>đảng viên, chiếm ${pct(dangVien.length, ds.length)}%</span></a>
+        <a href="#/tong-quan" data-xem="tuoi"><b>${tuoiBQ}</b><span>tuổi bình quân (${coTuoi.length} người đã khai ngày sinh)</span></a>
+        <a href="#/canh-bao" class="${canNL + canNH + klConHan.length ? 'can-xu-ly' : ''}"><b>${canNL + canNH}</b><span>cảnh báo: ${canNL} nâng lương trong 3 tháng, ${canNH} nghỉ hưu trong 12 tháng</span></a>
     </div>
-    <div class="tam"><h2>Hồ sơ cần bổ sung <small>Xếp từ hồ sơ khai ít nhất</small></h2>
+    <div class="luoi-bd">
+        <section class="tam"><h2>Giới tính</h2><div class="khung-bd"><canvas data-bd="gt"></canvas></div></section>
+        <section class="tam"><h2>Độ tuổi</h2><div class="khung-bd"><canvas data-bd="tuoi"></canvas></div></section>
+        <section class="tam"><h2>Trình độ chuyên môn</h2><div class="khung-bd"><canvas data-bd="cm"></canvas></div></section>
+        <section class="tam"><h2>Học vị</h2><div class="khung-bd"><canvas data-bd="hv"></canvas></div></section>
+        <section class="tam"><h2>Lý luận chính trị</h2><div class="khung-bd"><canvas data-bd="llct"></canvas></div></section>
+        <section class="tam"><h2>Đảng viên</h2><div class="khung-bd"><canvas data-bd="dang"></canvas></div></section>
+        <section class="tam"><h2>Ngạch công chức</h2><div class="khung-bd cao"><canvas data-bd="ngach"></canvas></div></section>
+        <section class="tam"><h2>Số người theo đơn vị</h2><div class="khung-bd cao"><canvas data-bd="dv"></canvas></div></section>
+        <section class="tam"><h2>Dân tộc</h2><div class="khung-bd"><canvas data-bd="dt"></canvas></div></section>
+        <section class="tam"><h2>Hệ số lương <small>Ưu tiên số liệu app nâng lương</small></h2><div class="khung-bd"><canvas data-bd="hs"></canvas></div></section>
+        <section class="tam rong"><h2>Khen thưởng, kỷ luật theo năm</h2><div class="khung-bd"><canvas data-bd="ktnam"></canvas></div></section>
+        <section class="tam rong"><h2>Khen thưởng, kỷ luật theo đơn vị</h2><div class="khung-bd"><canvas data-bd="ktdv"></canvas></div></section>
+    </div>
+    <section class="tam"><h2>Kỷ luật còn trong thời hạn <small>${klConHan.length} trường hợp</small></h2>
+        ${klConHan.length ? `<div class="cuon-ngang"><table class="bang bang-the"><thead><tr><th>Cán bộ</th><th>Đơn vị</th><th>Hình thức</th><th>Ngày quyết định</th><th>Hết thời hạn</th></tr></thead><tbody>
+        ${klConHan.sort((a, b) => a.ngay_het_han.localeCompare(b.ngay_het_han)).map(k => `<tr class="bam" data-id="${k._hs.id}"><td><b>${esc(k._hs.ho_ten)}</b></td><td data-nhan="Đơn vị">${esc(k._hs.don_vi || '')}</td>
+            <td data-nhan="Hình thức">${esc([k.hinh_thuc, k.he_thong && `(${k.he_thong})`].filter(Boolean).join(' ') || 'Chưa ghi')}</td><td data-nhan="Ngày QĐ">${esc(ngayVN(k.ngay_quyet_dinh))}</td>
+            <td data-nhan="Hết thời hạn"><b>${esc(ngayVN(k.ngay_het_han))}</b></td></tr>`).join('')}</tbody></table></div>` : '<p class="trong">Không có ai đang trong thời hạn kỷ luật.</p>'}
+    </section>
+    <section class="tam"><h2>Hồ sơ cần bổ sung <small>Khai dưới 80%, xếp từ ít nhất</small></h2>
         ${canBoSung.length ? `<div class="cuon-ngang"><table class="bang bang-the"><thead><tr><th>Cán bộ</th><th>Đơn vị</th><th>Đã khai</th><th>Còn thiếu</th></tr></thead><tbody>
-        ${canBoSung.map(r => `<tr class="bam" data-id="${r.id}">
-            <td><div class="ten-ds">${anhNho(r)}<div><b>${esc(r.ho_ten)}</b><small>${esc(r.chuc_vu || '')}</small></div></div></td>
+        ${canBoSung.map(r => `<tr class="bam" data-id="${r.id}"><td><div class="ten-ds">${anhNho(r)}<div><b>${esc(r.ho_ten)}</b><small>${esc(r.chuc_vu || '')}</small></div></div></td>
             <td data-nhan="Đơn vị">${esc(r.don_vi || '')}</td><td>${vach(r._ht.p)}</td>
             <td data-nhan="Còn thiếu">${esc(r._ht.thieu.slice(0, 3).join(', '))}${r._ht.thieu.length > 3 ? ` và ${r._ht.thieu.length - 3} mục khác` : ''}</td></tr>`).join('')}
-        </tbody></table></div>` : '<p class="trong">Tất cả hồ sơ đã khai đầy đủ.</p>'}
-    </div>
-    <div class="tam"><h2>Theo đơn vị</h2>
-        <div class="cuon-ngang"><table class="bang"><thead><tr><th>Đơn vị</th><th class="so">Số người</th><th>Mức khai trung bình</th></tr></thead><tbody>
-        ${theoDv.map(x => `<tr><td>${esc(x.dv)}</td><td class="so">${x.so}</td><td>${vach(x.tb)}</td></tr>`).join('') || '<tr><td colspan="3" class="trong">Chưa có hồ sơ.</td></tr>'}
-        </tbody></table></div>
-    </div>`;
+        </tbody></table></div>` : '<p class="trong">Tất cả hồ sơ đã khai từ 80% trở lên.</p>'}
+        ${ds.filter(r => r._ht.p < 80).length > 10 ? `<p style="margin:10px 0 0"><a href="#/danh-sach" data-loc-chua>Xem tất cả ${ds.filter(r => r._ht.p < 80).length} hồ sơ khai dưới 80%</a></p>` : ''}
+    </section>`;
+
+    const bd = k => $(`[data-bd="${k}"]`, trang);
+    const xem = (t, d) => hopDanhSach(t, d);
+    veBieuDo(bd('gt'), { kieu: 'doughnut', nhom: gomNhom(ds, r => r.gioi_tinh, ['Nam', 'Nữ', 'Chưa khai']) }, xem);
+    veBieuDo(bd('tuoi'), { kieu: 'bar', nhom: gomNhom(ds, r => nhomTuoi(r._tuoi), ['Dưới 30', '30–40', '41–50', '51–60', 'Trên 60', 'Chưa khai']) }, (t, d) => hopDanhSach(t, d, r => r._tuoi !== null ? `${r._tuoi} tuổi` : 'Chưa khai ngày sinh'));
+    veBieuDo(bd('cm'), { kieu: 'bar', nhom: gomNhom(ds, phanLoaiTrinhDo, ['Tiến sĩ', 'Thạc sĩ', 'Đại học', 'Cao đẳng', 'Trung cấp', 'Sơ cấp', 'Khác', 'Chưa khai']) }, (t, d) => hopDanhSach(t, d, r => r.trinh_do_chuyen_mon || ''));
+    veBieuDo(bd('hv'), { kieu: 'doughnut', nhom: gomNhom(ds, r => r.hoc_vi) }, xem);
+    veBieuDo(bd('llct'), { kieu: 'bar', nhom: gomNhom(ds, r => r.ly_luan_chinh_tri, [...DS_LY_LUAN, 'Chưa khai']) }, xem);
+    veBieuDo(bd('dang'), { kieu: 'doughnut', nhom: gomNhom(ds, r => r.ngay_vao_dang ? 'Đảng viên' : 'Chưa khai ngày vào Đảng', ['Đảng viên', 'Chưa khai ngày vào Đảng']) }, (t, d) => hopDanhSach(t, d, r => r.ngay_vao_dang ? `Vào Đảng ${ngayVN(r.ngay_vao_dang)}` : ''));
+    veBieuDo(bd('ngach'), { kieu: 'bar', ngang: true, nhom: gomNhom(ds, r => chuanNgach(r.ngach_cong_chuc) || chuanNgach(r._nl?.ngach_luong)) }, xem);
+    veBieuDo(bd('dv'), { kieu: 'bar', ngang: true, nhom: gomNhom(ds, r => DS_DON_VI.includes(r.don_vi) ? r.don_vi : (r.don_vi ? 'Khác' : null), [...DS_DON_VI, 'Khác', 'Chưa khai']) }, xem);
+    veBieuDo(bd('dt'), { kieu: 'doughnut', nhom: gomNhom(ds, r => r.dan_toc) }, xem);
+    veBieuDo(bd('hs'), { kieu: 'bar', nhom: gomNhom(ds, r => nhomHeSo(r._heSo), ['Dưới 3,0', '3,0–3,99', '4,0–4,99', '5,0–5,99', 'Từ 6,0', 'Chưa có']) }, (t, d) => hopDanhSach(t, d, r => r._heSo ? `Hệ số ${soVN(r._heSo)}` : 'Chưa có hệ số'));
+
+    // Khen thưởng, kỷ luật
+    const ktCo = kt.filter(k => k._hs);
+    const nam10 = new Date().getFullYear();
+    const thuTuNam = Array.from({ length: 10 }, (_, i) => String(nam10 - 9 + i));
+    const ktTheoNam = gomNhom(ktCo.filter(k => k.ngay_quyet_dinh && String(k.ngay_quyet_dinh).slice(0, 4) >= thuTuNam[0]), k => String(k.ngay_quyet_dinh).slice(0, 4), thuTuNam, true);
+    const ktTheoDv = gomNhom(ktCo, k => DS_DON_VI.includes(k._hs.don_vi) ? k._hs.don_vi : 'Khác', [...DS_DON_VI, 'Khác']);
+    const boKT = [{ n: 'Khen thưởng', loc: k => k.loai === 'Khen thưởng', mau: '#F5A623' }, { n: 'Kỷ luật', loc: k => k.loai === 'Kỷ luật', mau: '#C8102E' }];
+    const xemKT = (t, d) => hopDanhSach(t, d, k => [k.hinh_thuc, k.noi_dung, ngayVN(k.ngay_quyet_dinh)].filter(Boolean).join(' — '));
+    veBieuDo(bd('ktnam'), { kieu: 'bar', nhom: ktTheoNam, nhanBo: boKT, xepChong: true }, xemKT);
+    veBieuDo(bd('ktdv'), { kieu: 'bar', ngang: true, nhom: ktTheoDv.size ? ktTheoDv : new Map([['Chưa có dữ liệu', []]]), nhanBo: boKT }, xemKT);
+
     $$('tr[data-id]', trang).forEach(tr => tr.addEventListener('click', () => { location.hash = `#/ho-so/${tr.dataset.id}`; }));
-    $('[data-loc-chua]', trang).addEventListener('click', () => { S.locDs.tt = 'chua'; });
+    $('[data-loc-chua]', trang)?.addEventListener('click', () => { S.locDs.tt = 'chua'; });
+    $('[data-xem="dang"]', trang).addEventListener('click', e => { e.preventDefault(); hopDanhSach('Đảng viên', dangVien, r => `Vào Đảng ${ngayVN(r.ngay_vao_dang)}`); });
+    $('[data-xem="tuoi"]', trang).addEventListener('click', e => { e.preventDefault(); hopDanhSach('Cán bộ đã khai ngày sinh', [...coTuoi].sort((a, b) => b._tuoi - a._tuoi), r => `${r._tuoi} tuổi`); });
     gangAnhNho(trang, canBoSung);
+}
+
+// ─────────────────────────────────────────────────────────
+// 10. TRANG CẢNH BÁO (Admin)
+// ─────────────────────────────────────────────────────────
+S.cb = { tab: 'nl', khoang: { nl: 'q3', nh: 'q12', kl: 'con-han' }, dv: '', loai: '' };
+
+async function trangCanhBao(trang) {
+    let du;
+    try { du = await napToanBo(); }
+    catch (e) { if (/hs_nang_luong/.test(e.message || '')) throw new Error('Chưa chạy file sql/02_giai_doan_2.sql trong Supabase.'); throw e; }
+    const [ghep, dongBo] = await Promise.all([
+        q(sb.from('hs_ghep_luong').select('*')),
+        q(sb.from('hs_dong_bo').select('*').order('luc', { ascending: false }).limit(20)),
+    ]);
+    const { ds, nl, kt } = du;
+    const hn = homNayISO();
+    const boQua = new Set(ghep.filter(g => g.bo_qua).map(g => g.ten_chuan));
+    const nlChuaGhep = nl.filter(r => !r.ho_so_id && !boQua.has(r.ten_chuan));
+    const lanCuoi = dongBo[0];
+    const namNay = new Date().getFullYear();
+
+    const TAB = {
+        nl: { ten: 'Nâng lương', khoang: [['q3', 'Đã quá hạn và 3 tháng tới'], ['q6', '6 tháng tới'], ['q12', '12 tháng tới'], ['qua-han', 'Đã quá hạn'], ...[0, 1, 2].map(i => [`nam-${namNay + i}`, `Năm ${namNay + i}`]), ['tat-ca', 'Tất cả']] },
+        nh: { ten: 'Nghỉ hưu', khoang: [['q12', '12 tháng tới'], ['q6', '6 tháng tới'], ['q24', '24 tháng tới'], ...[0, 1, 2, 3].map(i => [`nam-${namNay + i}`, `Năm ${namNay + i}`]), ['tat-ca', 'Tất cả']] },
+        kl: { ten: 'Kỷ luật còn thời hạn', khoang: [['con-han', 'Đang còn thời hạn'], ['het-3', 'Hết thời hạn trong 3 tháng tới']] },
+        thieu: { ten: 'Chưa đủ dữ liệu' }, ghep: { ten: 'Ghép tên nâng lương' }, dongbo: { ten: 'Lịch sử đồng bộ' },
+    };
+    const locDv = r => !S.cb.dv || r.don_vi === S.cb.dv;
+
+    const dsNL = () => ds.filter(r => r._nl?.ngay_du_kien && locDv(r) && trongKhoang(r._nl.ngay_du_kien, S.cb.khoang.nl) && (!S.cb.loai || r._nl.loai === S.cb.loai))
+        .sort((a, b) => a._nl.ngay_du_kien.localeCompare(b._nl.ngay_du_kien));
+    const dsNH = () => ds.filter(r => r._nh && r._nh.ngay >= hn && locDv(r) && trongKhoang(r._nh.ngay, S.cb.khoang.nh)).sort((a, b) => a._nh.ngay.localeCompare(b._nh.ngay));
+    const dsKL = () => kt.filter(k => k.loai === 'Kỷ luật' && k._hs && k.ngay_het_han && k.ngay_het_han >= hn && locDv(k._hs)
+        && (S.cb.khoang.kl !== 'het-3' || k.ngay_het_han <= congThang(hn, 3))).sort((a, b) => a.ngay_het_han.localeCompare(b.ngay_het_han));
+    const thieuNS = ds.filter(r => !r._nh);
+    const khongNL = ds.filter(r => !r._nl);
+    const klThieuHan = kt.filter(k => k.loai === 'Kỷ luật' && k._hs && !k.ngay_het_han);
+
+    const conLai = iso => { const n = soNgayDen(iso); return n < 0 ? `<span class="the-nho do">Quá ${-n} ngày</span>` : n === 0 ? '<span class="the-nho do">Hôm nay</span>' : n <= 31 ? `<span class="the-nho do">Còn ${n} ngày</span>` : `<span class="the-nho">Còn ${Math.round(n / 30.4)} tháng</span>`; };
+    const bacHs = (bac, hs, vk) => [bac && `Bậc ${bac}`, hs && `HS ${soVN(hs)}`, vk && `VK ${vk}`].filter(Boolean).join(', ');
+
+    // Cấu trúc bảng cho từng loại (dùng chung cho màn hình và file xuất)
+    const BANG = {
+        nl: () => ({
+            tieuDe: 'Danh sách cán bộ, công chức đến hạn nâng lương', phuDe: moTaKhoang(S.cb.khoang.nl),
+            cot: [{ n: 'TT', w: 1.1 }, { n: 'Họ và tên', w: 4.2, canh: 'trai' }, { n: 'Chức vụ, đơn vị', w: 5, canh: 'trai' }, { n: 'Ngạch (mã ngạch)', w: 3.6 },
+                { n: 'Đang hưởng', w: 3.4 }, { n: 'Từ ngày', w: 2.4 }, { n: 'Đề nghị nâng', w: 3.4 }, { n: 'Từ ngày', w: 2.4 }, { n: 'Hình thức', w: 2.8 }],
+            dong: dsNL().map((r, i) => { const n = r._nl; return [i + 1, r.ho_ten, [r.chuc_vu, r.don_vi].filter(Boolean).join(', '),
+                `${chuanNgach(n.ngach_luong) || chuanNgach(r.ngach_cong_chuc) || ''}${n.ma_ngach ? ` (${n.ma_ngach})` : ''}`, bacHs(n.bac_luong, n.he_so, n.vuot_khung), ngayVN(n.ngay_gan_nhat),
+                n.loai === 'vuot_khung' ? `PC TNVK ${n.vuot_khung_moi || ''}` : bacHs(n.bac_moi, n.he_so_moi), ngayVN(n.ngay_du_kien),
+                n.loai === 'vuot_khung' ? 'Vượt khung' : 'Thường xuyên']; }),
+            them: dsNL().map(r => conLai(r._nl.ngay_du_kien)), ids: dsNL().map(r => r.id),
+        }),
+        nh: () => ({
+            tieuDe: 'Danh sách cán bộ, công chức đến tuổi nghỉ hưu', phuDe: [moTaKhoang(S.cb.khoang.nh), '(Tính theo lộ trình tuổi nghỉ hưu tại Nghị định số 135/2020/NĐ-CP)'].filter(Boolean).join(' '),
+            cot: [{ n: 'TT', w: 1.1 }, { n: 'Họ và tên', w: 4.4, canh: 'trai' }, { n: 'Chức vụ', w: 4.2, canh: 'trai' }, { n: 'Đơn vị', w: 5, canh: 'trai' },
+                { n: 'Ngày sinh', w: 2.6 }, { n: 'Giới tính', w: 1.9 }, { n: 'Tuổi nghỉ hưu', w: 3.2 }, { n: 'Thời điểm nghỉ hưu', w: 3 }],
+            dong: dsNH().map((r, i) => [i + 1, r.ho_ten, r.chuc_vu || '', r.don_vi || '', ngayVN(r.ngay_sinh), r.gioi_tinh, chuTuoi(r._nh.tuoi), ngayVN(r._nh.ngay)]),
+            them: dsNH().map(r => conLai(r._nh.ngay)), ids: dsNH().map(r => r.id),
+        }),
+        kl: () => ({
+            tieuDe: 'Danh sách cán bộ, công chức đang trong thời hạn kỷ luật', phuDe: `(Tính đến ngày ${ngayVN(hn)})`,
+            cot: [{ n: 'TT', w: 1.1 }, { n: 'Họ và tên', w: 4.2, canh: 'trai' }, { n: 'Chức vụ, đơn vị', w: 5, canh: 'trai' }, { n: 'Kỷ luật theo', w: 2.6 },
+                { n: 'Hình thức', w: 2.8 }, { n: 'Quyết định số, ngày', w: 4 }, { n: 'Hết thời hạn', w: 2.6 }, { n: 'Nội dung', w: 5, canh: 'trai' }],
+            dong: dsKL().map((k, i) => [i + 1, k._hs.ho_ten, [k._hs.chuc_vu, k._hs.don_vi].filter(Boolean).join(', '), k.he_thong || '', k.hinh_thuc || '',
+                [k.quyet_dinh_so, ngayVN(k.ngay_quyet_dinh)].filter(Boolean).join(', '), ngayVN(k.ngay_het_han), k.noi_dung || '']),
+            them: dsKL().map(k => conLai(k.ngay_het_han)), ids: dsKL().map(k => k._hs.id),
+        }),
+    };
+
+    const soTab = { nl: ds.filter(r => r._nl?.ngay_du_kien && trongKhoang(r._nl.ngay_du_kien, 'q3')).length,
+        nh: ds.filter(r => r._nh && r._nh.ngay >= hn && trongKhoang(r._nh.ngay, 'q12')).length,
+        kl: kt.filter(k => k.loai === 'Kỷ luật' && k._hs && k.ngay_het_han >= hn).length,
+        thieu: thieuNS.length + klThieuHan.length, ghep: nlChuaGhep.length };
+
+    trang.innerHTML = `
+    <div class="dau-trang"><div><h1>Cảnh báo</h1>
+        <p>${lanCuoi ? `Đồng bộ nâng lương lần cuối: ${new Date(lanCuoi.luc).toLocaleString('vi-VN')}${lanCuoi.thanh_cong ? '' : ' — <b style="color:var(--do)">không thành công</b>'}` : 'Chưa đồng bộ dữ liệu nâng lương lần nào.'}</p></div></div>
+    <div class="tab" role="tablist">${Object.entries(TAB).map(([k, t]) => `<button type="button" role="tab" data-cbtab="${k}" aria-selected="${S.cb.tab === k}">${esc(t.ten)}${soTab[k] ? ` <span class="the-nho${k === 'ghep' || k === 'thieu' ? '' : ' do'}">${soTab[k]}</span>` : ''}</button>`).join('')}</div>
+    <div data-vung-cb></div>`;
+
+    const vung = $('[data-vung-cb]', trang);
+    const ve = () => {
+        $$('[data-cbtab]', trang).forEach(b => b.setAttribute('aria-selected', b.dataset.cbtab === S.cb.tab));
+        const t = S.cb.tab;
+        if (BANG[t]) {
+            const b = BANG[t]();
+            vung.innerHTML = `
+            <div class="bo-loc">
+                <label class="o hep"><span>Khoảng thời gian</span><select data-khoang>${TAB[t].khoang.map(([v, n]) => `<option value="${v}"${S.cb.khoang[t] === v ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select></label>
+                <label class="o hep"><span>Đơn vị</span><select data-dvcb><option value="">Tất cả đơn vị</option>${DS_DON_VI.map(x => `<option${x === S.cb.dv ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select></label>
+                ${t === 'nl' ? `<label class="o hep"><span>Hình thức</span><select data-loai><option value="">Tất cả</option><option value="thuong_xuyen"${S.cb.loai === 'thuong_xuyen' ? ' selected' : ''}>Nâng bậc thường xuyên</option><option value="vuot_khung"${S.cb.loai === 'vuot_khung' ? ' selected' : ''}>Phụ cấp vượt khung</option></select></label>` : ''}
+            </div>
+            <section class="tam">
+                <h2>${esc(b.tieuDe)} <small>${b.dong.length} trường hợp ${esc(b.phuDe)}</small></h2>
+                <div class="nhom-nut" style="margin-bottom:12px"><button class="nut nut-nho" type="button" data-xuat="excel">Xuất Excel</button><button class="nut nut-nho" type="button" data-xuat="word">Xuất Word</button></div>
+                ${b.dong.length ? `<div class="cuon-ngang"><table class="bang bang-the"><thead><tr>${b.cot.map(c => `<th>${esc(c.n)}</th>`).join('')}<th></th></tr></thead><tbody>
+                ${b.dong.map((d, i) => `<tr class="bam" data-id="${b.ids[i]}">${d.map((v, j) => `<td data-nhan="${esc(b.cot[j].n)}"${j === 0 ? ' class="so"' : ''}>${j === 1 ? `<b>${esc(v)}</b>` : esc(v)}</td>`).join('')}<td>${b.them[i]}</td></tr>`).join('')}
+                </tbody></table></div>` : `<p class="trong">Không có trường hợp nào trong khoảng thời gian này.${t === 'nl' && !nl.length ? ' Dữ liệu nâng lương chưa được đồng bộ, xem tab Lịch sử đồng bộ.' : ''}</p>`}
+            </section>`;
+            $('[data-khoang]', vung).addEventListener('change', e => { S.cb.khoang[t] = e.target.value; ve(); });
+            $('[data-dvcb]', vung).addEventListener('change', e => { S.cb.dv = e.target.value; ve(); });
+            $('[data-loai]', vung)?.addEventListener('change', e => { S.cb.loai = e.target.value; ve(); });
+            $$('tr[data-id]', vung).forEach(tr => tr.addEventListener('click', () => { location.hash = `#/ho-so/${tr.dataset.id}`; }));
+            $$('[data-xuat]', vung).forEach(nut => nut.addEventListener('click', () => xuatDanhSach(nut.dataset.xuat, BANG[t](), t)));
+        } else if (t === 'thieu') {
+            const bangDs = (ds2, cotThem) => ds2.length ? `<div class="cuon-ngang"><table class="bang bang-the"><tbody>${ds2.map(r => { const h = r._hs || r; return `<tr class="bam" data-id="${h.id}"><td><b>${esc(h.ho_ten)}</b></td><td data-nhan="Đơn vị">${esc(h.don_vi || '')}</td><td>${esc(cotThem(r))}</td></tr>`; }).join('')}</tbody></table></div>` : '<p class="trong">Không có.</p>';
+            vung.innerHTML = `
+            <section class="tam"><h2>Chưa tính được tuổi nghỉ hưu <small>${thieuNS.length} người thiếu ngày sinh hoặc giới tính</small></h2>${bangDs(thieuNS, r => [!r.ngay_sinh && 'Thiếu ngày sinh', !r.gioi_tinh && 'Thiếu giới tính'].filter(Boolean).join(', '))}</section>
+            <section class="tam"><h2>Kỷ luật chưa có ngày hết thời hạn <small>${klThieuHan.length} trường hợp</small></h2>${bangDs(klThieuHan, k => [k.hinh_thuc || 'Chưa ghi hình thức', ngayVN(k.ngay_quyet_dinh)].filter(Boolean).join(', '))}</section>
+            <section class="tam"><h2>Hồ sơ chưa có dữ liệu nâng lương <small>${khongNL.length} người — kiểm tra tab Ghép tên nâng lương</small></h2>${bangDs(khongNL, r => r.chuc_vu || '')}</section>`;
+            $$('tr[data-id]', vung).forEach(tr => tr.addEventListener('click', () => { location.hash = `#/ho-so/${tr.dataset.id}`; }));
+        } else if (t === 'ghep') {
+            veGhepTen(vung, { ds, nl, ghep, nlChuaGhep, napLai: () => trangCanhBao(trang) });
+        } else {
+            vung.innerHTML = `
+            <section class="tam"><h2>Đồng bộ dữ liệu nâng lương</h2>
+                <p>Hệ thống tự lấy dữ liệu từ app theo dõi nâng lương lúc 2 giờ sáng mỗi ngày. Khi vừa sửa bên app nâng lương và cần cập nhật ngay, bấm nút dưới, chọn <b>Run workflow</b>, đợi khoảng 1 phút rồi tải lại trang này.</p>
+                ${CFG.GITHUB_REPO ? `<p><a class="nut" href="https://github.com/${esc(CFG.GITHUB_REPO)}/actions/workflows/dong_bo_nang_luong.yml" target="_blank" rel="noopener">Mở trang chạy đồng bộ trên GitHub</a></p>` : ''}
+            </section>
+            <section class="tam"><h2>20 lần đồng bộ gần nhất</h2>
+                ${dongBo.length ? `<div class="cuon-ngang"><table class="bang bang-the"><thead><tr><th>Thời gian</th><th>Kết quả</th><th class="so">Số dòng</th><th class="so">Đã ghép</th><th>Ghi chú</th></tr></thead><tbody>
+                ${dongBo.map(d => `<tr><td data-nhan="Thời gian" style="white-space:nowrap">${esc(new Date(d.luc).toLocaleString('vi-VN'))}</td>
+                    <td data-nhan="Kết quả">${d.thanh_cong ? '<span class="the-nho xanh">Thành công</span>' : '<span class="the-nho do">Lỗi</span>'}</td>
+                    <td class="so" data-nhan="Số dòng">${d.so_dong ?? ''}</td><td class="so" data-nhan="Đã ghép">${d.da_ghep ?? ''}</td><td>${esc(d.ghi_chu || '')}</td></tr>`).join('')}
+                </tbody></table></div>` : '<p class="trong">Chưa có lần đồng bộ nào. Làm theo hướng dẫn trong file HUONG_DAN.md để bật đồng bộ.</p>'}
+            </section>`;
+        }
+    };
+    $$('[data-cbtab]', trang).forEach(b => b.addEventListener('click', () => { S.cb.tab = b.dataset.cbtab; ve(); }));
+    ve();
+}
+
+function veGhepTen(vung, { ds, nl, ghep, nlChuaGhep, napLai }) {
+    const boQua = ghep.filter(g => g.bo_qua);
+    const daGhep = nl.filter(r => r.ho_so_id);
+    const hsDaDung = new Set(daGhep.map(r => r.ho_so_id));
+    const theoId = Object.fromEntries(ds.map(r => [r.id, r]));
+    const sapXep = [...ds].sort((a, b) => a.ho_ten.localeCompare(b.ho_ten, 'vi'));
+    const luaChon = r => {
+        const ten = boDau(r.ho_ten).split(' ').pop();
+        const goiY = sapXep.filter(h => boDau(h.ho_ten).split(' ').pop() === ten && !hsDaDung.has(h.id));
+        const khac = sapXep.filter(h => !goiY.includes(h));
+        return `<option value="">— Chọn hồ sơ —</option>${goiY.length ? `<optgroup label="Gợi ý (cùng tên)">${goiY.map(h => `<option value="${h.id}">${esc(h.ho_ten)} — ${esc(h.chuc_vu || '')}</option>`).join('')}</optgroup>` : ''}
+            <optgroup label="Tất cả hồ sơ">${khac.map(h => `<option value="${h.id}">${esc(h.ho_ten)}${hsDaDung.has(h.id) ? ' (đã ghép)' : ''}</option>`).join('')}</optgroup>`;
+    };
+    vung.innerHTML = `
+    <section class="tam"><h2>Chưa ghép được <small>${nlChuaGhep.length} người bên app nâng lương chưa tìm thấy hồ sơ cùng tên</small></h2>
+        ${nlChuaGhep.length ? `<div class="cuon-ngang"><table class="bang bang-the"><thead><tr><th>Tên bên app nâng lương</th><th>Chức vụ</th><th>Ghép với hồ sơ</th><th></th></tr></thead><tbody>
+        ${nlChuaGhep.map(r => `<tr><td><b>${esc(r.ho_ten)}</b></td><td data-nhan="Chức vụ">${esc(r.chuc_vu || '')}</td>
+            <td><select data-chon="${esc(r.ten_chuan)}" style="min-width:220px;min-height:36px;border:1px solid var(--vien);border-radius:6px;padding:4px 8px">${luaChon(r)}</select></td>
+            <td class="thao-tac"><div class="nhom-nut"><button class="nut nut-chinh nut-nho" data-ghep="${esc(r.ten_chuan)}">Ghép</button><button class="nut nut-nho" data-boqua="${esc(r.ten_chuan)}">Không có hồ sơ</button></div></td></tr>`).join('')}
+        </tbody></table></div>` : '<p class="trong">Tất cả đã được ghép.</p>'}
+    </section>
+    <section class="tam"><h2>Đã đánh dấu không có hồ sơ <small>${boQua.length} người, ví dụ lao động hợp đồng</small></h2>
+        ${boQua.length ? `<div class="cuon-ngang"><table class="bang"><tbody>${boQua.map(g => { const r = nl.find(x => x.ten_chuan === g.ten_chuan); return `<tr><td>${esc(r?.ho_ten || g.ten_chuan)}</td><td class="thao-tac"><button class="nut nut-nhe nut-nho" data-bobo="${esc(g.ten_chuan)}">Bỏ đánh dấu</button></td></tr>`; }).join('')}</tbody></table></div>` : '<p class="trong">Không có.</p>'}
+    </section>
+    <details class="tam"><summary style="cursor:pointer;font-weight:600">Đã ghép ${daGhep.length} người</summary>
+        <div class="cuon-ngang" style="margin-top:12px"><table class="bang"><tbody>${daGhep.map(r => `<tr><td>${esc(r.ho_ten)}</td><td>${esc(theoId[r.ho_so_id]?.ho_ten || '')} <small style="color:var(--mo)">${esc(theoId[r.ho_so_id]?.ma_cbcc || '')}</small></td>
+            <td class="thao-tac"><button class="nut nut-nhe nut-nho" data-boghep="${esc(r.ten_chuan)}">Bỏ ghép</button></td></tr>`).join('')}</tbody></table></div>
+    </details>`;
+
+    const lam = async (nut, viec, tb) => { nut.disabled = true; try { await viec(); thongBao(tb); await napLai(); } catch (e) { nut.disabled = false; thongBao(dichLoi(e), true); } };
+    $$('[data-ghep]', vung).forEach(n => n.addEventListener('click', () => {
+        const tc = n.dataset.ghep, hid = $(`[data-chon="${CSS.escape(tc)}"]`, vung).value;
+        if (!hid) return thongBao('Chọn hồ sơ cần ghép trước đã.', true);
+        lam(n, async () => {
+            await q(sb.from('hs_ghep_luong').upsert({ ten_chuan: tc, ho_so_id: hid, bo_qua: false, cap_nhat: new Date().toISOString() }));
+            await q(sb.from('hs_nang_luong').update({ ho_so_id: hid }).eq('ten_chuan', tc));
+        }, 'Đã ghép.');
+    }));
+    $$('[data-boqua]', vung).forEach(n => n.addEventListener('click', () => lam(n, async () => {
+        await q(sb.from('hs_ghep_luong').upsert({ ten_chuan: n.dataset.boqua, ho_so_id: null, bo_qua: true, cap_nhat: new Date().toISOString() }));
+    }, 'Đã đánh dấu không có hồ sơ.')));
+    $$('[data-bobo]', vung).forEach(n => n.addEventListener('click', () => lam(n, async () => {
+        await q(sb.from('hs_ghep_luong').delete().eq('ten_chuan', n.dataset.bobo));
+    }, 'Đã bỏ đánh dấu.')));
+    $$('[data-boghep]', vung).forEach(n => n.addEventListener('click', () => lam(n, async () => {
+        await q(sb.from('hs_ghep_luong').delete().eq('ten_chuan', n.dataset.boghep));
+        await q(sb.from('hs_nang_luong').update({ ho_so_id: null }).eq('ten_chuan', n.dataset.boghep));
+    }, 'Đã bỏ ghép. Lần đồng bộ tới sẽ tự ghép lại nếu có hồ sơ trùng tên.')));
+}
+
+async function xuatDanhSach(kieu, b, loai) {
+    if (!window.XuatFile) return thongBao('Chưa tải được module xuất file. Tải lại trang rồi thử lại.', true);
+    let luu = {};
+    try { luu = JSON.parse(localStorage.getItem('hs_xuat_ky') || '{}'); } catch (_) { /* bỏ qua */ }
+    const tenFile = { nl: 'DanhSach_NangLuong', nh: 'DanhSach_NghiHuu', kl: 'DanhSach_KyLuat' }[loai] + '_' + homNayISO().replace(/-/g, '');
+    await hopThoai({
+        tieuDe: `Xuất ${kieu === 'word' ? 'Word' : 'Excel'}: ${b.dong.length} trường hợp`, nutChinh: kieu === 'word' ? 'Tải file Word' : 'Tải file Excel',
+        noiDung: `<div class="luoi-o" style="grid-template-columns:1fr">
+            <label class="o"><span>Tiêu đề</span><input name="tieu_de" value="${esc(b.tieuDe)}"></label>
+            <label class="o"><span>Dòng dưới tiêu đề</span><input name="phu_de" value="${esc(b.phuDe)}"></label>
+            <label class="o"><span>Người lập biểu (họ và tên)</span><input name="nguoi_lap" value="${esc(luu.nguoi_lap || S.tk.ho_ten || '')}"></label>
+            <label class="o"><span>Chức danh người ký</span><textarea name="chuc_danh" style="min-height:72px" placeholder="Ví dụ:&#10;T/L TRƯỞNG BAN&#10;CHÁNH VĂN PHÒNG">${esc(luu.chuc_danh || '')}</textarea><small>Mỗi dòng một chức danh, in hoa khi xuất</small></label>
+            <label class="o"><span>Họ và tên người ký</span><input name="nguoi_ky" value="${esc(luu.nguoi_ky || '')}"></label>
+        </div>`,
+        xuLy: async fd => {
+            const g = k => String(fd.get(k) || '').trim();
+            const ky = { nguoi_lap: g('nguoi_lap'), chuc_danh: g('chuc_danh'), nguoi_ky: g('nguoi_ky') };
+            try { localStorage.setItem('hs_xuat_ky', JSON.stringify(ky)); } catch (_) { /* bỏ qua */ }
+            const o = { tieuDe: g('tieu_de') || b.tieuDe, phuDe: g('phu_de'), cot: b.cot, dong: b.dong.map(d => d.map(v => String(v ?? ''))),
+                nguoiLap: ky.nguoi_lap, chucDanhKy: ky.chuc_danh, nguoiKy: ky.nguoi_ky, tenFile };
+            await (kieu === 'word' ? XuatFile.word(o) : XuatFile.excel(o));
+            thongBao('Đã tạo file. Xem trong mục Tải xuống của trình duyệt.');
+        },
+    });
 }
 
 // ─────────────────────────────────────────────────────────
@@ -739,13 +1149,27 @@ async function trangHoSo(trang, id) {
         layAnh([hs.anh_the]),
     ]);
     const ht = hoanThien(hs, con.hs_cong_tac.length > 0, con.hs_dao_tao.length > 0);
+    let nlCuaHs = null;
+    try { nlCuaHs = (await sb.from('hs_nang_luong').select('*').eq('ho_so_id', id)).data?.[0] || null; } catch (_) { /* chưa chạy SQL GĐ2 */ }
+    const nh = nghiHuu(hs.ngay_sinh, hs.gioi_tinh);
+    const hnay = homNayISO();
+    const moc = [];
+    if (nlCuaHs?.ngay_du_kien) {
+        const gan = trongKhoang(nlCuaHs.ngay_du_kien, 'q3');
+        moc.push(`<li class="${gan ? 'gan' : ''}"><span>${nlCuaHs.loai === 'vuot_khung' ? 'Nâng phụ cấp vượt khung' : 'Nâng bậc lương'}</span><b>${esc(ngayVN(nlCuaHs.ngay_du_kien))}</b>
+            <small>${nlCuaHs.loai === 'vuot_khung' ? `lên ${esc(nlCuaHs.vuot_khung_moi || '')}` : `lên bậc ${esc(nlCuaHs.bac_moi || '')}, hệ số ${esc(soVN(nlCuaHs.he_so_moi))}`}${gan ? ' — sắp đến hạn' : ''}</small></li>`);
+    }
+    if (nh && nh.ngay >= hnay) {
+        const gan = trongKhoang(nh.ngay, 'q12');
+        moc.push(`<li class="${gan ? 'gan' : ''}"><span>Nghỉ hưu</span><b>${esc(ngayVN(nh.ngay))}</b><small>khi đủ ${esc(chuTuoi(nh.tuoi))}${gan ? ' — trong 12 tháng tới' : ''}</small></li>`);
+    }
     const anhUrl = lay(hs.anh_the);
     const t = tuoi(hs.ngay_sinh);
     const chucDanh = [hs.chuc_vu, hs.don_vi].filter(Boolean).join(', ');
     const tomTat = [
         ['Ngày sinh', hs.ngay_sinh ? `${ngayVN(hs.ngay_sinh)}${t !== null ? ` (${t} tuổi)` : ''}` : null],
         ['Giới tính', hs.gioi_tinh], ['Dân tộc', hs.dan_toc],
-        ['Ngạch', hs.ngach_cong_chuc ? `${hs.ngach_cong_chuc}${hs.bac_luong ? `, bậc ${hs.bac_luong}` : ''}` : null],
+        ['Ngạch', (hs.ngach_cong_chuc || nlCuaHs?.ngach_luong) ? `${chuanNgach(hs.ngach_cong_chuc) || chuanNgach(nlCuaHs.ngach_luong)}${(hs.bac_luong || nlCuaHs?.bac_luong) ? `, bậc ${hs.bac_luong || nlCuaHs.bac_luong}` : ''}` : null],
         ['Lý luận chính trị', hs.ly_luan_chinh_tri], ['Vào Đảng', ngayVN(hs.ngay_vao_dang) || null],
     ];
 
@@ -761,6 +1185,7 @@ async function trangHoSo(trang, id) {
             <h1>${esc(hs.ho_ten)}</h1>
             <div class="chuc-danh">${esc(chucDanh || 'Chưa khai chức vụ, đơn vị')}</div>
             <dl>${tomTat.map(([n, v]) => `<div><dt>${esc(n)}</dt><dd>${v ? esc(v) : '<span style="color:#A8A29A;font-weight:400">Chưa khai</span>'}</dd></div>`).join('')}</dl>
+            ${moc.length ? `<ul class="moc">${moc.join('')}</ul>` : ''}
             <div class="nhom-nut">
                 ${coQuyen ? `<a class="nut nut-chinh" href="#/ho-so/${hs.id}/sua">Sửa hồ sơ</a>` : ''}
                 <button class="nut" type="button" data-in>In trang này</button>
@@ -851,6 +1276,40 @@ async function trangHoSo(trang, id) {
     });
 }
 
+// Form khen thưởng/kỷ luật: ẩn hiện ô kỷ luật, lọc hình thức theo hệ thống, gợi ý ngày hết thời hạn
+function ganKyLuat(form) {
+    const o = k => form.elements[k];
+    const khung = k => o(k).closest('.o');
+    let suaTay = !!o('ngay_het_han').value;
+    o('ngay_het_han').addEventListener('input', () => { suaTay = !!o('ngay_het_han').value; });
+    const capNhat = (doiHinhThuc) => {
+        const laKL = o('loai').value === 'Kỷ luật';
+        ['he_thong', 'hinh_thuc', 'ngay_het_han'].forEach(k => khung(k).classList.toggle('an', !laKL));
+        if (!laKL) return;
+        const ht = o('he_thong').value || 'Chính quyền';
+        if (!o('he_thong').value) o('he_thong').value = ht;
+        if (doiHinhThuc) {
+            const cu = o('hinh_thuc').value;
+            const ds = Object.keys(THOI_HAN_KL[ht]);
+            o('hinh_thuc').innerHTML = '<option value="">— Chọn —</option>' + ds.map(x => `<option${x === cu ? ' selected' : ''}>${esc(x)}</option>`).join('');
+        }
+        const thang = THOI_HAN_KL[ht]?.[o('hinh_thuc').value];
+        const goi = khung('ngay_het_han').querySelector('small');
+        if (thang && o('ngay_quyet_dinh').value) {
+            const goiY = congThang(o('ngay_quyet_dinh').value, thang);
+            if (!suaTay) o('ngay_het_han').value = goiY;
+            goi.textContent = `Gợi ý: ${thang} tháng kể từ ngày quyết định, tức ${ngayVN(goiY)}. Sửa được nếu quyết định ghi khác.`;
+        } else {
+            goi.textContent = thang === null ? 'Hình thức này không có thời hạn, để trống.' : 'Nhập ngày quyết định và chọn hình thức để app gợi ý.';
+        }
+    };
+    o('loai').addEventListener('change', () => capNhat(true));
+    o('he_thong').addEventListener('change', () => capNhat(true));
+    o('hinh_thuc').addEventListener('change', () => { suaTay = false; capNhat(false); });
+    o('ngay_quyet_dinh').addEventListener('change', () => { suaTay = false; capNhat(false); });
+    capNhat(true);
+}
+
 function veBangCon(vung, bang, rows, hoSoId, coQuyen, napLai) {
     const c = BANG_CON[bang];
     vung.innerHTML = `
@@ -864,9 +1323,12 @@ function veBangCon(vung, bang, rows, hoSoId, coQuyen, napLai) {
         const ok = await hopThoai({
             tieuDe: `${r ? 'Sửa' : 'Thêm'} ${c.don}`, nutChinh: r ? 'Lưu thay đổi' : 'Thêm',
             noiDung: `<div class="luoi-o" style="grid-template-columns:1fr 1fr">${c.cot.map(f => oNhap(f, r ? r[f.k] : (f.k === 'loai' ? 'Khen thưởng' : ''))).join('')}</div>`,
+            sauKhiMo: bang === 'hs_khen_thuong' ? ganKyLuat : null,
             xuLy: async fd => {
                 const [du, loi] = docForm(fd, c.cot);
                 if (loi) return loi;
+                if (bang === 'hs_khen_thuong' && du.loai !== 'Kỷ luật') { du.he_thong = null; du.hinh_thuc = null; du.ngay_het_han = null; }
+                if (du.ngay_het_han && du.ngay_quyet_dinh && du.ngay_het_han < du.ngay_quyet_dinh) return 'Ngày hết thời hạn không thể trước ngày quyết định.';
                 if (r) await q(sb.from(bang).update(du).eq('id', r.id));
                 else await q(sb.from(bang).insert({ ...du, ho_so_id: hoSoId }));
             },
