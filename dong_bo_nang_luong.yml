@@ -1,0 +1,25 @@
+name: Đồng bộ nâng lương
+
+on:
+  schedule:
+    - cron: "0 19 * * *"   # 19:00 UTC = 2:00 sáng giờ Việt Nam
+  workflow_dispatch:         # cho phép bấm "Run workflow" để chạy ngay
+
+jobs:
+  dong-bo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Cài thư viện
+        run: pip install supabase python-dateutil
+      - name: Đồng bộ
+        run: python .github/scripts/dong_bo_nang_luong.py
+        env:
+          NL_URL: ${{ secrets.NL_URL }}
+          NL_KEY: ${{ secrets.NL_KEY }}
+          HS_URL: ${{ secrets.HS_URL }}
+          HS_KEY: ${{ secrets.HS_KEY }}
