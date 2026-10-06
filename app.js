@@ -59,7 +59,7 @@ const MUC = [
         ['quoc_tich', 'Quốc tịch'],
         ['so_cccd', 'Số CCCD', 'chu', { goiY: '12 chữ số' }],
         ['ngay_cap_cccd', 'Ngày cấp CCCD', 'ngay'],
-        ['so_bhxh', 'Số sổ BHXH'],
+        ['so_bhxh', 'Mã số BHXH (số sổ BHXH)', 'chu', { goiY: '12 số định danh cá nhân, hoặc 10 số mã cũ' }],
         ['thuong_tru', 'Nơi đăng ký thường trú', 'chu', { rong: 1 }],
         ['noi_o_hien_nay', 'Nơi ở hiện nay', 'chu', { rong: 1 }],
     ]},
@@ -1771,7 +1771,8 @@ async function trangSua(trang, id) {
         const baoLoi = msg => { thongBao(msg, true); };
         if (loi) return baoLoi(loi);
         if (du.so_cccd && !/^(\d{9}|\d{12})$/.test(du.so_cccd)) return baoLoi('Số CCCD gồm 12 chữ số (CMND cũ: 9 chữ số).');
-        if (du.so_bhxh && !/^\d{10}$/.test(du.so_bhxh)) return baoLoi('Số sổ BHXH gồm 10 chữ số.');
+        if (du.so_bhxh) du.so_bhxh = du.so_bhxh.replace(/[\s.-]/g, '');
+        if (du.so_bhxh && !/^(\d{10}|\d{12})$/.test(du.so_bhxh)) return baoLoi('Mã số BHXH gồm 12 chữ số (số định danh cá nhân) hoặc 10 chữ số (mã cũ).');
         const homNay = new Date().toISOString().slice(0, 10);
         if (du.ngay_sinh && du.ngay_sinh >= homNay) return baoLoi('Ngày sinh phải trước ngày hôm nay.');
         if (du.ngay_vao_dang && du.ngay_chinh_thuc && du.ngay_chinh_thuc < du.ngay_vao_dang) return baoLoi('Ngày chính thức không thể trước ngày vào Đảng.');
