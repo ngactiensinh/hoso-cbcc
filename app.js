@@ -461,7 +461,7 @@ function mucMenu() {
     return S.admin ? [
         { id: 'tong-quan', n: 'Tổng quan', i: ICON.tq },
         { id: 'danh-sach', n: 'Danh sách', i: ICON.ds },
-        { id: 'nang-luong', n: 'Nâng lương', i: ICON.nl },
+        { id: 'nang-luong', n: 'Nâng lương', ngan: 'Lương', i: ICON.nl },
         { id: 'canh-bao', n: 'Cảnh báo', i: ICON.cb },
         { id: 'tai-khoan', n: 'Tài khoản', i: ICON.tk, dem: true },
         { id: 'cua-toi', n: 'Hồ sơ của tôi', ngan: 'Của tôi', i: ICON.hs },
@@ -623,6 +623,16 @@ function phanLoaiTrinhDo(r) {
     if (/so cap/.test(cm)) return 'Sơ cấp';
     return trong(r.trinh_do_chuyen_mon) ? 'Chưa khai' : 'Khác';
 }
+// Gộp học vị gõ tự do (Thạc sĩ / Thạc sỹ / Thạc sĩ Xây dựng Đảng...) về một cấp
+function chuanHocVi(v) {
+    const t = boDau(v).trim();
+    if (!t) return 'Chưa khai';
+    if (/tien s[iy]/.test(t)) return 'Tiến sĩ';
+    if (/thac s[iy]/.test(t)) return 'Thạc sĩ';
+    if (/^(khong|chua co|chua)\b/.test(t)) return 'Không có học vị';
+    if (/cu nhan|ky su|dai hoc|bac si/.test(t)) return 'Cử nhân, kỹ sư';
+    return 'Khác';
+}
 const nhomTuoi = t => t === null ? 'Chưa khai' : t < 30 ? 'Dưới 30' : t <= 40 ? '30–40' : t <= 50 ? '41–50' : t <= 60 ? '51–60' : 'Trên 60';
 const nhomHeSo = h => h === null || h === undefined ? 'Chưa có' : h < 3 ? 'Dưới 3,0' : h < 4 ? '3,0–3,99' : h < 5 ? '4,0–4,99' : h < 6 ? '5,0–5,99' : 'Từ 6,0';
 
@@ -774,7 +784,7 @@ async function trangTongQuan(trang) {
     veBieuDo(bd('gt'), { kieu: 'doughnut', nhom: gomNhom(ds, r => r.gioi_tinh, ['Nam', 'Nữ', 'Chưa khai']) }, xem);
     veBieuDo(bd('tuoi'), { kieu: 'bar', nhom: gomNhom(ds, r => nhomTuoi(r._tuoi), ['Dưới 30', '30–40', '41–50', '51–60', 'Trên 60', 'Chưa khai']) }, (t, d) => hopDanhSach(t, d, r => r._tuoi !== null ? `${r._tuoi} tuổi` : 'Chưa khai ngày sinh'));
     veBieuDo(bd('cm'), { kieu: 'bar', nhom: gomNhom(ds, phanLoaiTrinhDo, ['Tiến sĩ', 'Thạc sĩ', 'Đại học', 'Cao đẳng', 'Trung cấp', 'Sơ cấp', 'Khác', 'Chưa khai']) }, (t, d) => hopDanhSach(t, d, r => r.trinh_do_chuyen_mon || ''));
-    veBieuDo(bd('hv'), { kieu: 'doughnut', nhom: gomNhom(ds, r => r.hoc_vi) }, xem);
+    veBieuDo(bd('hv'), { kieu: 'doughnut', nhom: gomNhom(ds, r => chuanHocVi(r.hoc_vi), ['Tiến sĩ', 'Thạc sĩ', 'Cử nhân, kỹ sư', 'Không có học vị', 'Khác', 'Chưa khai']) }, (t, d) => hopDanhSach(t, d, r => r.hoc_vi ? `Ghi trong hồ sơ: ${r.hoc_vi}` : ''));
     veBieuDo(bd('llct'), { kieu: 'bar', nhom: gomNhom(ds, r => r.ly_luan_chinh_tri, [...DS_LY_LUAN, 'Chưa khai']) }, xem);
     veBieuDo(bd('dang'), { kieu: 'doughnut', nhom: gomNhom(ds, r => r.ngay_vao_dang ? 'Đảng viên' : 'Chưa khai ngày vào Đảng', ['Đảng viên', 'Chưa khai ngày vào Đảng']) }, (t, d) => hopDanhSach(t, d, r => r.ngay_vao_dang ? `Vào Đảng ${ngayVN(r.ngay_vao_dang)}` : ''));
     veBieuDo(bd('ngach'), { kieu: 'bar', ngang: true, nhom: gomNhom(ds, r => chuanNgach(r.ngach_cong_chuc) || chuanNgach(r._nl?.ngach_luong)) }, xem);
