@@ -1,5 +1,5 @@
 /* =====================================================================
-   HỒ SƠ CBCC — BAN TUYÊN GIÁO TỈNH ỦY TUYÊN QUANG  (v8.2 — Gộp phân hệ nâng lương)
+   HỒ SƠ CBCC — BAN TUYÊN GIÁO TỈNH ỦY TUYÊN QUANG  (v8.3 — Thống kê nâng lương trước thời hạn)
    GitHub Pages + Supabase (Auth + RLS)
    ===================================================================== */
 'use strict';
@@ -39,6 +39,8 @@ const DS_NGACH = ['Chuyên viên cao cấp', 'Chuyên viên chính', 'Chuyên vi
     'Kế toán viên trung cấp', 'Văn thư viên', 'Văn thư viên trung cấp', 'Nhân viên lái xe', 'Nhân viên phục vụ'];
 const DS_NHOM_MAU = ['A', 'B', 'AB', 'O'];
 const DS_SUC_KHOE = ['Tốt', 'Khá', 'Trung bình'];
+const DS_HINH_THUC_NANG = ['Xếp lương lần đầu', 'Thường xuyên', 'Trước thời hạn do thành tích', 'Trước thời hạn do thông báo nghỉ hưu',
+    'Vượt một bậc', 'Phụ cấp vượt khung', 'Chuyển, nâng ngạch'];
 const DS_HINH_THUC = ['Chính quy', 'Vừa làm vừa học', 'Tại chức', 'Từ xa', 'Tập trung', 'Bồi dưỡng'];
 
 // ─────────────────────────────────────────────────────────
@@ -140,6 +142,11 @@ const BANG_CON = {
         ['ngay_quyet_dinh', 'Ngày quyết định', 'ngay'],
         ['bac_luong', 'Bậc lương'],
         ['he_so', 'Hệ số', 'so'],
+        ['ngach_luong', 'Ngạch', 'goi_y', { ds: ['Chuyên viên cao cấp', 'Chuyên viên chính', 'Chuyên viên', 'Kế toán viên', 'Kế toán viên trung cấp', 'Văn thư viên', 'Văn thư viên trung cấp', 'Nhân viên lái xe', 'Nhân viên phục vụ'] }],
+        ['ma_ngach', 'Mã ngạch', 'chu', { an: 1, goiY: 'Ví dụ: 01002' }],
+        ['hinh_thuc', 'Hình thức nâng', 'chon', { ds: DS_HINH_THUC_NANG }],
+        ['rut_ngan_thang', 'Số tháng được rút ngắn', 'so', { nguyen: 1, an: 1, goiY: 'Từ 1 đến 12 tháng, theo quyết định' }],
+        ['nam_xet', 'Năm xét chỉ tiêu', 'so', { nguyen: 1, an: 1, goiY: 'Năm xét nâng trước thời hạn (quyết định ký quý I thường thuộc năm xét trước)' }],
         ['ngay_nang_bac_tiep_theo', 'Ngày tính nâng bậc tiếp theo', 'ngay'],
         ['quyet_dinh_so', 'Quyết định số'],
     ]},
@@ -191,6 +198,7 @@ function dichLoi(e) {
     if (/duplicate key/i.test(m)) return 'Dữ liệu bị trùng: mã này đã tồn tại.';
     if (/Failed to fetch|NetworkError|Load failed/i.test(m)) return 'Không kết nối được máy chủ. Kiểm tra mạng rồi thử lại.';
     if (/JWT|token is expired|refresh token/i.test(m)) return 'Phiên đăng nhập đã hết hạn. Tải lại trang để đăng nhập lại.';
+    if (/da_xac_nhan|rut_ngan_thang|nam_xet|p_hinh_thuc/.test(m) && /does not exist|Could not find|schema cache/i.test(m)) return 'Chưa chạy file sql/05_hinh_thuc_nang_luong.sql trong Supabase.';
     if (/hs_luong_hien_huong|hs_cau_hinh|hs_xac_nhan_nang_luong|da_chuyen/.test(m) && /does not exist|Could not find|schema cache/i.test(m)) return 'Chưa chạy file sql/03_nang_luong.sql trong Supabase.';
     if (/hs_nang_luong|hs_ghep_luong|hs_dong_bo|he_thong|hinh_thuc|ngay_het_han/.test(m) && /does not exist|Could not find|schema cache/i.test(m)) return 'Chưa chạy file sql/02_giai_doan_2.sql trong Supabase.';
     if (/row-level security|permission denied/i.test(m)) return 'Tài khoản không có quyền thực hiện thao tác này.';
@@ -648,10 +656,12 @@ function gomNhom(ds, layNhan, thuTu = null, giuTrong = false) {
 }
 
 async function napToanBo() {
-    const [ds, nl, kt] = await Promise.all([
+    const [ds, nl, kt, luongDb, ctDb] = await Promise.all([
         napDanhSach(true),
         sb.from('hs_luong_hien_huong').select('*').then(r => { if (r.error) throw r.error; return r.data; }),
         q(sb.from('hs_khen_thuong').select('*')),
+        sb.from('hs_luong').select('id, ho_so_id, ngay_quyet_dinh, hinh_thuc, nam_xet, ngach_luong, rut_ngan_thang, da_xac_nhan').then(r => r.error ? null : r.data),
+        sb.from('hs_cau_hinh').select('gia_tri').eq('khoa', 'chi_tieu_truoc_han').then(r => r.error ? [] : r.data),
     ]);
     const theoId = Object.fromEntries(ds.map(r => [r.id, r]));
     const nlTheoHs = {};
@@ -665,7 +675,7 @@ async function napToanBo() {
     kt.forEach(k => { k._hs = theoId[k.ho_so_id]; });
     const hn = homNayISO();
     const klConHan = kt.filter(k => k.loai === 'Kỷ luật' && k._hs && k.ngay_het_han && k.ngay_het_han >= hn);
-    return { ds, nl, kt, theoId, klConHan };
+    return { ds, nl, kt, theoId, klConHan, luongDb, chiTieu: ctDb?.[0]?.gia_tri || {} };
 }
 
 // ─────────────────────────────────────────────────────────
@@ -761,6 +771,9 @@ async function trangTongQuan(trang) {
         <section class="tam"><h2>Số người theo đơn vị</h2><div class="khung-bd cao"><canvas data-bd="dv"></canvas></div></section>
         <section class="tam"><h2>Dân tộc</h2><div class="khung-bd"><canvas data-bd="dt"></canvas></div></section>
         <section class="tam"><h2>Hệ số lương <small>Theo mục Nâng lương</small></h2><div class="khung-bd"><canvas data-bd="hs"></canvas></div></section>
+        ${du.luongDb ? `<section class="tam rong"><h2>Nâng lương trước thời hạn, vượt một bậc theo năm xét <small>${theChiTieu(tinhChiTieu({ rows: du.nl.filter(l => du.theoId[l.ho_so_id]), luong: du.luongDb, theoId: du.theoId, chiTieu: du.chiTieu }, new Date().getFullYear()), new Date().getFullYear())}</small></h2>
+            <div class="khung-bd"><canvas data-bd="th-tq"></canvas></div>
+            ${du.luongDb.some(d => !d.da_xac_nhan) ? `<p style="margin:8px 0 0;color:var(--mo);font-size:13px">${du.luongDb.filter(d => !d.da_xac_nhan).length} dòng diễn biến lương chờ xác nhận chưa được tính. <a href="#/nang-luong" data-sang-ra-soat>Rà soát</a></p>` : ''}</section>` : ''}
         <section class="tam rong"><h2>Khen thưởng, kỷ luật theo năm</h2><div class="khung-bd"><canvas data-bd="ktnam"></canvas></div></section>
         <section class="tam rong"><h2>Khen thưởng, kỷ luật theo đơn vị</h2><div class="khung-bd"><canvas data-bd="ktdv"></canvas></div></section>
     </div>
@@ -803,6 +816,14 @@ async function trangTongQuan(trang) {
     veBieuDo(bd('ktnam'), { kieu: 'bar', nhom: ktTheoNam, nhanBo: boKT, xepChong: true }, xemKT);
     veBieuDo(bd('ktdv'), { kieu: 'bar', ngang: true, nhom: ktTheoDv.size ? ktTheoDv : new Map([['Chưa có dữ liệu', []]]), nhanBo: boKT }, xemKT);
 
+    if (du.luongDb) {
+        const dacBiet = du.luongDb.filter(d => d.da_xac_nhan && HT_DAC_BIET.includes(d.hinh_thuc) && du.theoId[d.ho_so_id]).map(d => ({ ...d, _hs: du.theoId[d.ho_so_id], _nam: namCuaDong(d) }));
+        const namTQ = Array.from({ length: 10 }, (_, i) => String(new Date().getFullYear() - 8 + i));
+        veBieuDo(bd('th-tq'), { kieu: 'bar', nhom: gomNhom(dacBiet.filter(d => d._nam && String(d._nam) >= namTQ[0]), d => String(d._nam), namTQ, true), xepChong: true,
+            nhanBo: [{ n: 'Do thành tích', loc: d => d.hinh_thuc === HT_THANH_TICH, mau: '#C8102E' }, { n: 'Vượt một bậc', loc: d => d.hinh_thuc === HT_VUOT_BAC, mau: '#F5A623' }, { n: 'Do thông báo nghỉ hưu', loc: d => d.hinh_thuc === HT_NGHI_HUU, mau: '#5B6B80' }] },
+            (t, d) => hopDanhSach(t, d, x => `${chuanNgach(x.ngach_luong) || 'Chưa ghi ngạch'}${x.rut_ngan_thang ? `, rút ngắn ${x.rut_ngan_thang} tháng` : ''} — ${ngayVN(x.ngay_quyet_dinh)}`));
+        $('[data-sang-ra-soat]', trang)?.addEventListener('click', () => { S.nl.tab = 'ra-soat'; });
+    }
     $$('tr[data-id]', trang).forEach(tr => tr.addEventListener('click', () => { location.hash = `#/ho-so/${tr.dataset.id}`; }));
     $('[data-loc-chua]', trang)?.addEventListener('click', () => { S.locDs.tt = 'chua'; });
     $('[data-xem="dang"]', trang).addEventListener('click', e => { e.preventDefault(); hopDanhSach('Đảng viên', dangVien, r => `Vào Đảng ${ngayVN(r.ngay_vao_dang)}`); });
@@ -918,7 +939,10 @@ async function trangNangLuong(trang) {
     try { tam = (await sb.from('hs_nang_luong').select('*').eq('da_chuyen', false)).data || []; } catch (_) { /* bảng tạm có thể chưa có */ }
     const { ds, rows, ch } = du;
     const dem = k => rows.filter(r => r.tt === k).length;
-    const TAB = [['theo-doi', 'Theo dõi'], ['bieu-do', 'Biểu đồ'], ['van-ban', 'Văn bản nâng lương'], ['cai-dat', 'Cài đặt'],
+    let choXN = null;
+    try { const r = await sb.from('hs_luong').select('id', { count: 'exact', head: true }).eq('da_xac_nhan', false); if (!r.error) choXN = r.count || 0; } catch (_) { /* chưa chạy SQL 05 */ }
+    const TAB = [['theo-doi', 'Theo dõi'], ['bieu-do', 'Biểu đồ'], ['truoc-han', 'Trước thời hạn'], ['du-kien', 'Dự kiến xét'],
+        ['ra-soat', `Rà soát diễn biến${choXN ? ` (${choXN})` : ''}`], ['van-ban', 'Văn bản nâng lương'], ['cai-dat', 'Cài đặt'],
         ...(tam.length || !rows.length ? [['chuyen', `Chuyển dữ liệu${tam.length ? ` (${tam.length})` : ''}`]] : [])];
     if (!TAB.some(t => t[0] === S.nl.tab)) S.nl.tab = 'theo-doi';
     if (!rows.length && tam.length) S.nl.tab = 'chuyen';
@@ -934,9 +958,19 @@ async function trangNangLuong(trang) {
     <div data-vung-nl></div>`;
     const vung = $('[data-vung-nl]', trang);
     const napLai = () => trangNangLuong(trang);
-    const ve = () => {
+    let duTH = null;
+    const ve = async () => {
         huyBieuDo();
         $$('[data-nltab]', trang).forEach(b => b.setAttribute('aria-selected', b.dataset.nltab === S.nl.tab));
+        const MOI = { 'truoc-han': veTruocHanNL, 'du-kien': veDuKienXetNL, 'ra-soat': veRaSoatNL };
+        if (MOI[S.nl.tab]) {
+            if (choXN === null) { vung.innerHTML = '<div class="loi">Chưa chạy file sql/05_hinh_thuc_nang_luong.sql trong Supabase.</div>'; return; }
+            if (!duTH) {
+                vung.innerHTML = '<div class="dang-tai">Đang tải…</div>';
+                try { duTH = await napTruocHan(); } catch (e) { vung.innerHTML = `<div class="loi">${esc(dichLoi(e))}</div>`; return; }
+            }
+            return MOI[S.nl.tab](vung, { ...duTH, napLai });
+        }
         ({ 'theo-doi': veTheoDoiNL, 'bieu-do': veBieuDoNL, 'van-ban': veVanBanNL, 'cai-dat': veCaiDatNL, chuyen: veChuyenNL })[S.nl.tab](vung, { ...du, tam, napLai });
     };
     $$('[data-nltab]', trang).forEach(b => b.addEventListener('click', () => { S.nl.tab = b.dataset.nltab; ve(); }));
@@ -1033,6 +1067,8 @@ async function suaLuong(r, dsChon, napLai) {
 async function xacNhanDaNang(r, napLai) {
     const vk = r.loai === 'vuot_khung';
     const hn = homNayISO();
+    let ganNhat = null;
+    try { ganNhat = (await sb.from('hs_luong').select('hinh_thuc, ngay_quyet_dinh').eq('ho_so_id', r.ho_so_id).not('hinh_thuc', 'is', null).order('ngay_quyet_dinh', { ascending: false }).limit(1)).data?.[0] || null; } catch (_) { /* bỏ qua */ }
     const ok = await hopThoai({
         tieuDe: `Xác nhận đã nâng lương: ${r.hs.ho_ten}`, nutChinh: 'Xác nhận',
         noiDung: `<p>Đang hưởng: <b>${esc(bacHsVB(r.bac_luong, r.he_so, r.vuot_khung))}</b> từ ${esc(ngayVN(r.ngay_huong))}.</p>
@@ -1044,8 +1080,26 @@ async function xacNhanDaNang(r, napLai) {
                 <label class="o"><span>Hưởng từ ngày <em>*</em></span><input name="ngay_huong" type="date" value="${esc(r.ngay_du_kien)}"><small>Sửa nếu kéo dài do kỷ luật</small></label>
                 <label class="o"><span>Số quyết định</span><input name="so_qd" placeholder="Ví dụ: 125-QĐ/BTGTU"></label>
                 <label class="o"><span>Ngày quyết định</span><input name="ngay_qd" type="date" value="${hn}"></label>
+                <label class="o"><span>Hình thức nâng</span><select name="hinh_thuc">${DS_HINH_THUC_NANG.filter(x => x !== 'Xếp lương lần đầu').map(x => `<option${x === (vk ? 'Phụ cấp vượt khung' : 'Thường xuyên') ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select></label>
+                <label class="o an" data-o-rut><span>Số tháng được rút ngắn</span><select name="rut_ngan"><option>12</option><option>9</option><option>6</option>${[11, 10, 8, 7, 5, 4, 3, 2, 1].map(x => `<option>${x}</option>`).join('')}</select><small>Ngày hưởng tự lùi theo số tháng rút ngắn</small></label>
+                <label class="o an" data-o-nam><span>Năm xét chỉ tiêu</span><input name="nam_xet" inputmode="numeric" value="${new Date().getMonth() < 3 ? new Date().getFullYear() - 1 : new Date().getFullYear()}"></label>
             </div>
-            <p style="margin:12px 0 0;color:var(--mo);font-size:13px">Mức lương mới sẽ được ghi thêm vào mục Diễn biến lương trên hồ sơ.</p>`,
+            ${ganNhat && HT_TINH_CHI_TIEU.includes(ganNhat.hinh_thuc) ? `<div class="loi an" data-canh-lien-tiep style="margin-top:12px">Lần nâng gần nhất (${esc(ngayVN(ganNhat.ngay_quyet_dinh))}) là ${esc(ganNhat.hinh_thuc.toLowerCase())}. Quy định không cho nâng trước thời hạn hoặc vượt một bậc hai lần liên tiếp.</div>` : ''}
+            <p style="margin:12px 0 0;color:var(--mo);font-size:13px">Mức lương mới sẽ được ghi thêm vào mục Diễn biến lương trên hồ sơ (đã xác nhận).</p>`,
+        sauKhiMo: form => {
+            const o = k => form.elements[k];
+            const doi = () => {
+                const ht = o('hinh_thuc').value;
+                $('[data-o-rut]', form).classList.toggle('an', !ht.startsWith('Trước thời hạn'));
+                $('[data-o-nam]', form).classList.toggle('an', !HT_DAC_BIET.includes(ht));
+                $('[data-canh-lien-tiep]', form)?.classList.toggle('an', !HT_TINH_CHI_TIEU.includes(ht));
+                if (ht.startsWith('Trước thời hạn') && r.ngay_du_kien) o('ngay_huong').value = congThang(r.ngay_du_kien, -Number(o('rut_ngan').value));
+                else if (ht === HT_VUOT_BAC && r.ngay_huong) o('ngay_huong').value = r.ngay_huong;   // Điều 7 khoản 1: giữ thời điểm của bậc cũ
+                else if (r.ngay_du_kien) o('ngay_huong').value = r.ngay_du_kien;
+            };
+            o('hinh_thuc').addEventListener('change', doi);
+            o('rut_ngan').addEventListener('change', doi);
+        },
         xuLy: async fd => {
             const g = k => String(fd.get(k) || '').trim();
             const hs = Number(g('he_so').replace(',', '.'));
@@ -1053,8 +1107,11 @@ async function xacNhanDaNang(r, napLai) {
             if (!Number.isFinite(hs) || hs <= 0) return 'Hệ số mới chưa đúng.';
             if (g('vk') && !/^\d+\s*%$/.test(g('vk'))) return 'Phụ cấp vượt khung ghi dạng số %, ví dụ 8%.';
             const tiep = tinhNangLuong({ ...r, bac_luong: g('bac'), he_so: hs, vuot_khung: g('vk'), ngay_huong: g('ngay_huong') }, r.hs.chuc_vu).ngay_du_kien;
+            const ht = g('hinh_thuc');
+            if (HT_DAC_BIET.includes(ht) && !/^\d{4}$/.test(g('nam_xet'))) return 'Năm xét ghi 4 chữ số.';
             await q(sb.rpc('hs_xac_nhan_nang_luong', { p_ho_so: r.ho_so_id, p_bac: g('bac'), p_he_so: hs, p_vuot_khung: g('vk'),
-                p_ngay_huong: g('ngay_huong'), p_so_qd: g('so_qd'), p_ngay_qd: g('ngay_qd') || null, p_ngay_nang_tiep: tiep }));
+                p_ngay_huong: g('ngay_huong'), p_so_qd: g('so_qd'), p_ngay_qd: g('ngay_qd') || null, p_ngay_nang_tiep: tiep,
+                p_hinh_thuc: ht, p_rut_ngan: ht.startsWith('Trước thời hạn') ? +g('rut_ngan') : null, p_nam_xet: HT_DAC_BIET.includes(ht) ? +g('nam_xet') : null }));
         },
     });
     if (ok) { S.ds = null; thongBao('Đã cập nhật mức lương mới và ghi vào Diễn biến lương.'); napLai(); }
@@ -1237,6 +1294,347 @@ function veChuyenNL(vung, { ds, rows, tam, napLai }) {
 }
 
 // ─────────────────────────────────────────────────────────
+// 12. NÂNG LƯƠNG TRƯỚC THỜI HẠN — thống kê, chỉ tiêu 10%, dự kiến xét, rà soát diễn biến
+//     Căn cứ: Thông tư 08/2013/TT-BNV (sửa đổi bởi Thông tư 03/2021/TT-BNV); Quy chế của Ban.
+// ─────────────────────────────────────────────────────────
+const HT_THANH_TICH = 'Trước thời hạn do thành tích', HT_NGHI_HUU = 'Trước thời hạn do thông báo nghỉ hưu', HT_VUOT_BAC = 'Vượt một bậc';
+const HT_TINH_CHI_TIEU = [HT_THANH_TICH, HT_VUOT_BAC];          // Điều 10 Quy chế: tính vào chỉ tiêu 10%
+const HT_DAC_BIET = [HT_THANH_TICH, HT_VUOT_BAC, HT_NGHI_HUU];
+const TEN_NHOM_NGACH = { A3: ['Chuyên viên cao cấp', '01001'], A2: ['Chuyên viên chính', '01002'], A1: ['Chuyên viên', '01003'], B: [null, null], LAI_XE: ['Nhân viên lái xe', '01010'], PHUC_VU: ['Nhân viên phục vụ', '01009'] };
+const soThang = (a, b) => { if (!a || !b) return null; const [y1, m1, d1] = a.split('-').map(Number), [y2, m2, d2] = b.split('-').map(Number); return (y2 - y1) * 12 + (m2 - m1) + (d2 - d1) / 30; };
+const docBac = s => { const m = String(s || '').match(/^\s*(\d+)\s*\/\s*(\d+)/); const vk = String(s || '').match(/(\d+)\s*%/); return { x: m ? +m[1] : null, y: m ? +m[2] : null, vk: vk ? +vk[1] : null }; };
+// Năm xét suy từ ngày quyết định: xét trong quý IV, bổ sung đến hết quý I năm sau
+const namXetTuNgay = ngay => { if (!ngay) return null; const [y, m] = String(ngay).split('-').map(Number); return m <= 3 ? y - 1 : y; };
+const namCuaDong = d => d.nam_xet || namXetTuNgay(d.ngay_quyet_dinh);
+const laLanhDaoQuanLy = cv => /trưởng|phó|chánh/i.test(String(cv || ''));
+S.th = { nam: new Date().getFullYear() };
+
+// Ngạch tại thời điểm nâng: suy từ hệ số + số bậc của ngạch (bảng lương NĐ 204/2004)
+function nhomTuHeSo(hs, y, nhomHienTai) {
+    const ung = Object.entries(BANG_HE_SO).filter(([, b]) => (!y || b.length === y) && b.some(v => Math.abs(v - hs) < 0.005)).map(([k]) => k);
+    return ung.includes(nhomHienTai) ? nhomHienTai : ung[0] || null;
+}
+
+// Gợi ý ngạch, hình thức, số tháng rút ngắn, năm xét cho từng dòng diễn biến lương của MỘT người
+function goiYDienBien(dsDong, hs, lhh) {
+    const nhomHT = lhh ? nhomNgach(lhh.ngach_luong, lhh.ma_ngach, hs.chuc_vu) : null;
+    const nh = nghiHuu(hs.ngay_sinh, hs.gioi_tinh);
+    const sx = [...dsDong].sort((a, b) => String(a.ngay_quyet_dinh || '9999').localeCompare(String(b.ngay_quyet_dinh || '9999')) || a.id - b.id);
+    const kq = {};
+    let truoc = null;
+    for (const d of sx) {
+        const b = docBac(d.bac_luong), he = d.he_so === null || d.he_so === undefined ? null : Number(d.he_so);
+        const nhom = he !== null ? nhomTuHeSo(he, b.y, nhomHT) : null;
+        const [tenN, maN] = nhom ? (nhom === nhomHT && lhh ? [chuanNgach(lhh.ngach_luong), lhh.ma_ngach] : TEN_NHOM_NGACH[nhom]) : [null, null];
+        const g = { ngach_luong: d.ngach_luong || tenN, ma_ngach: d.ma_ngach || maN, hinh_thuc: null, rut_ngan_thang: null, nam_xet: null, ly_do: '' };
+        if (!truoc) {
+            g.hinh_thuc = b.x === 1 ? 'Xếp lương lần đầu' : 'Thường xuyên';
+            g.ly_do = 'Dòng đầu tiên trong diễn biến lương';
+        } else {
+            const bt = truoc.b, thang = soThang(truoc.d.ngay_quyet_dinh, d.ngay_quyet_dinh);
+            const han = (THOI_HAN_NL[nhom || truoc.nhom] || 3) * 12;
+            if (nhom && truoc.nhom && nhom !== truoc.nhom) { g.hinh_thuc = 'Chuyển, nâng ngạch'; g.ly_do = 'Hệ số thuộc bảng lương ngạch khác dòng trước'; }
+            else if (b.vk !== null || (b.x !== null && b.x === bt.x && he !== null && truoc.he !== null && he === truoc.he)) { g.hinh_thuc = 'Phụ cấp vượt khung'; g.ly_do = 'Giữ nguyên bậc cuối, hưởng phụ cấp vượt khung'; }
+            else if (b.x !== null && bt.x !== null && b.x === bt.x + 1 && thang !== null) {
+                const tl = Math.round(thang);
+                if (tl <= han - 4) {
+                    const den = nh ? soThang(d.ngay_quyet_dinh, nh.ngay) : null;
+                    g.hinh_thuc = den !== null && den >= 0 && den <= 18 ? HT_NGHI_HUU : HT_THANH_TICH;
+                    g.rut_ngan_thang = Math.min(12, Math.max(1, han - tl));
+                    g.ly_do = `Cách lần nâng trước ${tl} tháng, thời hạn ${han} tháng` + (g.hinh_thuc === HT_NGHI_HUU ? '; sắp đến tuổi nghỉ hưu' : '');
+                } else { g.hinh_thuc = 'Thường xuyên'; g.ly_do = `Cách lần nâng trước ${tl} tháng`; }
+            } else { g.ly_do = 'Chưa đủ căn cứ để gợi ý, đề nghị kiểm tra quyết định'; }
+        }
+        if (HT_DAC_BIET.includes(g.hinh_thuc)) g.nam_xet = namXetTuNgay(d.ngay_quyet_dinh);
+        kq[d.id] = g;
+        truoc = { d, b, he, nhom };
+    }
+    return kq;
+}
+
+// Mức rút ngắn theo Điều 7 Quy chế, suy từ nội dung khen thưởng (chỉ là gợi ý, Hội đồng quyết định)
+function mucThanhTich(dsKhen) {
+    let tot = { thang: 0, dong: [] };
+    const csCoSo = [];
+    for (const k of dsKhen) {
+        const t = boDau(k.noi_dung);
+        let m = 0;
+        if (/huan chuong|anh hung lao dong|(nha giao|thay thuoc|nghe si) (nhan dan|uu tu)|chien si thi dua toan quoc|thu tuong|ban thuong vu tinh uy|btv tinh uy/.test(t)) m = 12;
+        else if (/chien si thi dua (cap )?(tinh|bo|nganh)|bang khen.*(chu tich (uy ban nhan dan|ubnd) tinh|ubnd tinh|uy ban nhan dan tinh|bo truong|trung uong)/.test(t)) m = 9;
+        else if (/chien si thi dua co so|cstd co so/.test(t)) { m = 6; if (k.ngay_quyet_dinh) csCoSo.push(+String(k.ngay_quyet_dinh).slice(0, 4)); }
+        else if (/giay khen|bang khen/.test(t)) m = 6;
+        if (m > tot.thang) tot = { thang: m, dong: [k] }; else if (m && m === tot.thang) tot.dong.push(k);
+    }
+    const nam = [...new Set(csCoSo)].sort();
+    if (tot.thang < 9 && nam.some((y, i) => nam[i + 1] === y + 1)) tot = { thang: 9, dong: dsKhen.filter(k => /chien si thi dua co so|cstd co so/.test(boDau(k.noi_dung))), ghi: '02 năm liên tục Chiến sĩ thi đua cơ sở' };
+    return tot;
+}
+
+async function napTruocHan() {
+    const [base, luong, khen, ct] = await Promise.all([
+        napNangLuong(),
+        sb.from('hs_luong').select('*').then(r => { if (r.error) throw r.error; return r.data; }),
+        q(sb.from('hs_khen_thuong').select('*')),
+        q(sb.from('hs_cau_hinh').select('gia_tri').eq('khoa', 'chi_tieu_truoc_han')),
+    ]);
+    const theoHs = {};
+    luong.forEach(d => { (theoHs[d.ho_so_id] = theoHs[d.ho_so_id] || []).push(d); });
+    Object.values(theoHs).forEach(a => a.sort((x, y) => String(x.ngay_quyet_dinh || '9999').localeCompare(String(y.ngay_quyet_dinh || '9999')) || x.id - y.id));
+    return { ...base, luong, theoHs, khen, chiTieu: ct[0]?.gia_tri || {} };
+}
+
+function tinhChiTieu(du, nam) {
+    const cauHinh = du.chiTieu[nam] || {};
+    const soNguoi = Number.isFinite(+cauHinh.so_nguoi) && cauHinh.so_nguoi !== '' && cauHinh.so_nguoi !== undefined ? +cauHinh.so_nguoi : du.rows.length;
+    const giaoThem = +cauHinh.giao_them || 0;
+    const tong = Math.floor(soNguoi / 10) + giaoThem;
+    const daDung = du.luong.filter(d => d.da_xac_nhan && HT_TINH_CHI_TIEU.includes(d.hinh_thuc) && namCuaDong(d) === nam && du.theoId[d.ho_so_id]);
+    return { soNguoi, tuDem: cauHinh.so_nguoi === undefined || cauHinh.so_nguoi === '', giaoThem, tong, du: soNguoi % 10, daDung, conLai: tong - daDung.length };
+}
+
+function theChiTieu(ct, nam) {
+    const muc = ct.conLai < 0 ? ['do', `Vượt chỉ tiêu ${-ct.conLai} suất`] : ct.conLai === 0 ? ['do', 'Đã hết chỉ tiêu'] : ct.conLai === 1 ? ['vang', 'Còn 1 suất'] : ['xanh', `Còn ${ct.conLai} suất`];
+    return `<span class="the-nho ${muc[0]}">${muc[1]}</span> <span style="color:var(--mo);font-size:13px">năm ${nam}: đã dùng ${ct.daDung.length}/${ct.tong} suất (${ct.soNguoi} người${ct.tuDem ? ', tự đếm' : ''}${ct.giaoThem ? `, giao thêm ${ct.giaoThem}` : ''})</span>`;
+}
+
+function veTruocHanNL(vung, du) {
+    const nam = S.th.nam;
+    const ct = tinhChiTieu(du, nam);
+    const dacBiet = du.luong.filter(d => d.da_xac_nhan && HT_DAC_BIET.includes(d.hinh_thuc) && du.theoId[d.ho_so_id])
+        .map(d => ({ ...d, _hs: du.theoId[d.ho_so_id], _nam: namCuaDong(d) }));
+    const choXN = du.luong.filter(d => !d.da_xac_nhan && du.theoId[d.ho_so_id]).length;
+    const namHT = new Date().getFullYear();
+    const dsNam = [...new Set([namHT + 1, namHT, ...dacBiet.map(d => d._nam).filter(Boolean)])].sort((a, b) => b - a);
+    // Không hai lần liên tiếp (Điều 3 khoản 3 Quy chế; điểm d khoản 1 Điều 3 TT 08 sửa đổi)
+    const lienTiep = [];
+    Object.entries(du.theoHs).forEach(([hid, a]) => {
+        const xn = a.filter(d => d.hinh_thuc);
+        for (let i = 1; i < xn.length; i++) if (HT_TINH_CHI_TIEU.includes(xn[i].hinh_thuc) && HT_TINH_CHI_TIEU.includes(xn[i - 1].hinh_thuc) && du.theoId[hid])
+            lienTiep.push(`${du.theoId[hid].ho_ten} (${ngayVN(xn[i - 1].ngay_quyet_dinh)} và ${ngayVN(xn[i].ngay_quyet_dinh)})`);
+    });
+    const trongNam = dacBiet.filter(d => d._nam === nam).sort((a, b) => String(a.ngay_quyet_dinh).localeCompare(String(b.ngay_quyet_dinh)));
+    vung.innerHTML = `
+    ${choXN ? `<div class="loi" style="margin-bottom:12px;border-left-color:var(--vang);background:var(--vang-nhat);color:var(--muc)"><b>${choXN} dòng diễn biến lương chờ xác nhận</b> chưa được tính vào thống kê. <a href="#/nang-luong" data-sang-ra-soat>Rà soát ngay</a></div>` : ''}
+    ${lienTiep.length ? `<div class="loi" style="margin-bottom:12px"><b>Nâng trước thời hạn hai lần liên tiếp</b> (quy định không cho phép): ${lienTiep.map(esc).join('; ')}. Kiểm tra lại hình thức nâng của các dòng này.</div>` : ''}
+    <div class="bo-loc"><label class="o hep"><span>Năm xét</span><select data-nam-th>${dsNam.map(y => `<option${y === nam ? ' selected' : ''}>${y}</option>`).join('')}</select></label></div>
+    <section class="tam"><h2>Chỉ tiêu nâng lương trước thời hạn năm ${nam} <small>Không quá 10% tổng số người trong danh sách trả lương tính đến 31/12</small></h2>
+        <div class="chi-so bon" style="margin-bottom:12px">
+            <div class="o-so"><b>${ct.soNguoi}</b><span>người trong danh sách trả lương${ct.tuDem ? ' (app tự đếm)' : ''}</span></div>
+            <div class="o-so"><b>${ct.tong}</b><span>suất (${Math.floor(ct.soNguoi / 10)} theo tỷ lệ, dư ${ct.du} người${ct.giaoThem ? `; giao thêm ${ct.giaoThem}` : ''})</span></div>
+            <div class="o-so"><b>${ct.daDung.length}</b><span>đã dùng (thành tích và vượt một bậc)</span></div>
+            <div class="o-so ${ct.conLai <= 1 ? 'can-xu-ly' : ''}"><b>${ct.conLai}</b><span>${ct.conLai < 0 ? 'vượt chỉ tiêu' : 'suất còn lại'}</span></div>
+        </div>
+        <p style="margin:0 0 10px">${theChiTieu(ct, nam)}</p>
+        <p style="margin:0;color:var(--mo);font-size:13px">Cứ 10 người được 1 suất, số dư dưới 10 người báo cáo cấp trên trong quý IV để xem xét giao thêm (điểm c khoản 1 Điều 3 Thông tư 08/2013/TT-BNV). Chỉ tiêu không dùng hết đến hết quý I năm sau thì không chuyển sang năm sau. Nâng trước thời hạn do có thông báo nghỉ hưu không tính vào chỉ tiêu.</p>
+        <div class="nhom-nut" style="margin-top:12px"><button class="nut nut-nho" type="button" data-sua-ct>Sửa số người, số suất giao thêm</button></div>
+    </section>
+    <div class="luoi-bd">
+        <section class="tam rong"><h2>Số lần nâng theo năm xét <small>Chỉ tính dòng đã xác nhận</small></h2><div class="khung-bd"><canvas data-bd="th-nam"></canvas></div></section>
+        <section class="tam"><h2>Theo ngạch</h2><div class="khung-bd cao"><canvas data-bd="th-ngach"></canvas></div></section>
+        <section class="tam"><h2>Theo đơn vị</h2><div class="khung-bd cao"><canvas data-bd="th-dv"></canvas></div></section>
+    </div>
+    <section class="tam"><h2>Các trường hợp năm xét ${nam} <small>${trongNam.length} trường hợp</small>
+        <span class="nhom-nut"><button class="nut nut-nho" type="button" data-xuat-th="excel">Xuất Excel</button><button class="nut nut-nho" type="button" data-xuat-th="word">Xuất Word</button></span></h2>
+        ${trongNam.length ? `<div class="cuon-ngang"><table class="bang bang-the"><thead><tr><th>Cán bộ</th><th>Ngạch</th><th>Hình thức</th><th>Lên bậc, hệ số</th><th>Rút ngắn</th><th>Quyết định</th></tr></thead><tbody>
+        ${trongNam.map(d => `<tr class="bam" data-id="${d.ho_so_id}"><td><b>${esc(d._hs.ho_ten)}</b><br><small style="color:var(--mo)">${esc(d._hs.chuc_vu || '')}</small></td>
+            <td data-nhan="Ngạch">${esc(chuanNgach(d.ngach_luong) || 'Chưa ghi')}</td><td data-nhan="Hình thức">${esc(d.hinh_thuc)}</td>
+            <td data-nhan="Lên">${esc(bacHsVB(d.bac_luong, d.he_so))}</td><td data-nhan="Rút ngắn">${d.rut_ngan_thang ? `${d.rut_ngan_thang} tháng` : ''}</td>
+            <td data-nhan="Quyết định">${esc([d.quyet_dinh_so, ngayVN(d.ngay_quyet_dinh)].filter(Boolean).join(', '))}</td></tr>`).join('')}</tbody></table></div>` : '<p class="trong">Chưa có trường hợp nào được xác nhận trong năm xét này.</p>'}
+    </section>`;
+
+    const nam10 = Array.from({ length: 10 }, (_, i) => String(namHT - 8 + i));
+    const bo = [{ n: 'Do thành tích', loc: d => d.hinh_thuc === HT_THANH_TICH, mau: '#C8102E' }, { n: 'Vượt một bậc', loc: d => d.hinh_thuc === HT_VUOT_BAC, mau: '#F5A623' }, { n: 'Do thông báo nghỉ hưu', loc: d => d.hinh_thuc === HT_NGHI_HUU, mau: '#5B6B80' }];
+    const xemDs = (t, ds) => hopDanhSach(t, ds, d => `${d.hinh_thuc}${d.rut_ngan_thang ? `, rút ngắn ${d.rut_ngan_thang} tháng` : ''} — ${ngayVN(d.ngay_quyet_dinh)}`);
+    veBieuDo($('[data-bd="th-nam"]', vung), { kieu: 'bar', nhom: gomNhom(dacBiet.filter(d => d._nam && String(d._nam) >= nam10[0]), d => String(d._nam), nam10, true), nhanBo: bo, xepChong: true }, xemDs);
+    veBieuDo($('[data-bd="th-ngach"]', vung), { kieu: 'bar', ngang: true, nhom: dacBiet.length ? gomNhom(dacBiet, d => chuanNgach(d.ngach_luong) || 'Chưa ghi ngạch') : new Map([['Chưa có dữ liệu', []]]), nhanBo: bo, xepChong: true }, xemDs);
+    veBieuDo($('[data-bd="th-dv"]', vung), { kieu: 'bar', ngang: true, nhom: dacBiet.length ? gomNhom(dacBiet, d => DS_DON_VI.includes(d._hs.don_vi) ? d._hs.don_vi : 'Khác', [...DS_DON_VI, 'Khác']) : new Map([['Chưa có dữ liệu', []]]), nhanBo: bo, xepChong: true }, xemDs);
+
+    $('[data-nam-th]', vung).addEventListener('change', e => { S.th.nam = +e.target.value; veTruocHanNL(vung, du); });
+    $('[data-sang-ra-soat]', vung)?.addEventListener('click', e => { e.preventDefault(); S.nl.tab = 'ra-soat'; du.napLai(); });
+    $$('tr[data-id]', vung).forEach(tr => tr.addEventListener('click', () => { location.hash = `#/ho-so/${tr.dataset.id}`; }));
+    $('[data-sua-ct]', vung).addEventListener('click', () => suaChiTieu(du, nam));
+    $$('[data-xuat-th]', vung).forEach(b => b.addEventListener('click', () => xuatDanhSach(b.dataset.xuatTh, {
+        tieuDe: 'Danh sách cán bộ, công chức được nâng bậc lương trước thời hạn, nâng lương vượt một bậc', phuDe: `Năm xét ${nam}`,
+        cot: [{ n: 'TT', w: 1 }, { n: 'Họ và tên', w: 4, canh: 'trai' }, { n: 'Chức vụ', w: 4, canh: 'trai' }, { n: 'Ngạch (mã)', w: 3.6 }, { n: 'Hình thức', w: 3.6 },
+            { n: 'Bậc, hệ số mới', w: 3 }, { n: 'Rút ngắn', w: 2 }, { n: 'Quyết định số, ngày', w: 3.6 }],
+        dong: trongNam.map((d, i) => [i + 1, d._hs.ho_ten, d._hs.chuc_vu || '', `${chuanNgach(d.ngach_luong) || ''}${d.ma_ngach ? ` (${d.ma_ngach})` : ''}`, d.hinh_thuc,
+            bacHsVB(d.bac_luong, d.he_so), d.rut_ngan_thang ? `${d.rut_ngan_thang} tháng` : '', [d.quyet_dinh_so, ngayVN(d.ngay_quyet_dinh)].filter(Boolean).join(', ')]),
+    }, 'th')));
+}
+
+async function suaChiTieu(du, nam) {
+    const cu = du.chiTieu[nam] || {};
+    const ok = await hopThoai({
+        tieuDe: `Chỉ tiêu nâng lương trước thời hạn năm ${nam}`, nutChinh: 'Lưu',
+        noiDung: `<div class="luoi-o" style="grid-template-columns:1fr 1fr">
+            <label class="o"><span>Số người trong danh sách trả lương (31/12/${nam})</span><input name="so_nguoi" inputmode="numeric" value="${esc(cu.so_nguoi ?? '')}" placeholder="Để trống: app tự đếm (${du.rows.length})"><small>Gồm cả lao động hợp đồng xếp lương theo bảng lương Nhà nước và các đồng chí thuộc diện Ban Thường vụ quản lý</small></label>
+            <label class="o"><span>Số suất cấp trên giao thêm</span><input name="giao_them" inputmode="numeric" value="${esc(cu.giao_them ?? '')}" placeholder="0"></label></div>`,
+        xuLy: async fd => {
+            const sn = String(fd.get('so_nguoi')).trim(), gt = String(fd.get('giao_them')).trim();
+            if (sn && !/^\d+$/.test(sn)) return 'Số người phải là số nguyên.';
+            if (gt && !/^\d+$/.test(gt)) return 'Số suất giao thêm phải là số nguyên.';
+            const moi = { ...du.chiTieu, [nam]: { so_nguoi: sn === '' ? undefined : +sn, giao_them: gt === '' ? 0 : +gt } };
+            await q(sb.from('hs_cau_hinh').upsert({ khoa: 'chi_tieu_truoc_han', gia_tri: JSON.parse(JSON.stringify(moi)), cap_nhat: new Date().toISOString() }));
+        },
+    });
+    if (ok) { thongBao('Đã lưu chỉ tiêu.'); du.napLai(); }
+}
+
+// Danh sách dự kiến xét theo Quy chế: Điều 4 (điều kiện), Điều 7 (mức rút ngắn), Điều 8 (thời gian tính thành tích), Điều 11 (ưu tiên)
+function tinhDuKienXet(du, nam) {
+    const cuoiNam = `${nam}-12-31`, hn = homNayISO();
+    const datDk = [], khongDat = [], nghiHuuDs = [];
+    for (const r of du.rows) {
+        const h = r.hs, ls = du.theoHs[h.id] || [];
+        const nhom = nhomNgach(r.ngach_luong, r.ma_ngach, h.chuc_vu);
+        const daTruocHan = ls.filter(d => HT_TINH_CHI_TIEU.includes(d.hinh_thuc));
+        // Trường hợp có thông báo nghỉ hưu (Điều 9, khoản 2 Điều 3 TT 08) — không tính chỉ tiêu
+        const nh = nghiHuu(h.ngay_sinh, h.gioi_tinh);
+        if (nh && r.loai !== 'vuot_khung' && r.ngay_du_kien && nh.ngay > hn && nh.ngay <= congThang(cuoiNam, 12)
+            && r.ngay_du_kien > nh.ngay && soThang(nh.ngay, r.ngay_du_kien) <= 12) nghiHuuDs.push({ r, nh });
+        if (r.loai === 'vuot_khung' || !r.ngay_du_kien) continue;                                 // bậc cuối hoặc chưa có ngày hưởng
+        if (!(r.ngay_du_kien > cuoiNam && r.ngay_du_kien <= congThang(cuoiNam, 12))) continue;   // không thiếu từ 12 tháng trở xuống
+        const lyDo = [];
+        // Lần nâng gần nhất: dòng cuối diễn biến; dòng chưa khai hình thức thì dùng gợi ý của app
+        const ganNhat = ls.slice(-1)[0];
+        const htGanNhat = ganNhat ? (ganNhat.hinh_thuc || goiYDienBien(ls, h, r)[ganNhat.id]?.hinh_thuc) : null;
+        if (HT_TINH_CHI_TIEU.includes(htGanNhat)) lyDo.push(`lần nâng gần nhất (${ngayVN(ganNhat.ngay_quyet_dinh)}) là ${htGanNhat.toLowerCase()}${ganNhat.da_xac_nhan ? '' : ' (chưa xác nhận)'}, không thực hiện hai lần liên tiếp`);
+        const kl = du.khen.filter(k => k.ho_so_id === h.id && k.loai === 'Kỷ luật' && ((k.ngay_quyet_dinh && r.ngay_huong && k.ngay_quyet_dinh >= r.ngay_huong) || (k.ngay_het_han && k.ngay_het_han >= hn)));
+        if (kl.length) lyDo.push(`có kỷ luật trong thời gian giữ bậc (${kl.map(k => `${k.hinh_thuc || 'chưa ghi hình thức'} ${ngayVN(k.ngay_quyet_dinh)}`).join(', ')})`);
+        const soNam = ['B', 'LAI_XE', 'PHUC_VU'].includes(nhom) ? 4 : 6;
+        const moc = [congThang(cuoiNam, -12 * soNam), ...daTruocHan.map(d => d.ngay_quyet_dinh).filter(Boolean)].sort().pop();
+        const khen = du.khen.filter(k => k.ho_so_id === h.id && k.loai === 'Khen thưởng' && k.ngay_quyet_dinh && k.ngay_quyet_dinh > moc && k.ngay_quyet_dinh <= cuoiNam);
+        const tt = mucThanhTich(khen);
+        if (!tt.thang) lyDo.push(`chưa có thành tích thuộc Điều 7 Quy chế trong ${soNam} năm gần nhất`);
+        const muc = { r, h, tt, soNam, thieu: Math.ceil(soThang(cuoiNam, r.ngay_du_kien)), daTruocHan: daTruocHan.length, lyDo };
+        (lyDo.length ? khongDat : datDk).push(muc);
+    }
+    // Điều 11: thành tích cao hơn; chưa từng nâng trước hạn; nhiều năm công tác hơn; cao tuổi hơn; không giữ chức vụ lãnh đạo; nữ
+    datDk.sort((a, b) => b.tt.thang - a.tt.thang || (a.daTruocHan > 0) - (b.daTruocHan > 0)
+        || String(a.h.ngay_tuyen_dung || '9999').localeCompare(String(b.h.ngay_tuyen_dung || '9999'))
+        || String(a.h.ngay_sinh || '9999').localeCompare(String(b.h.ngay_sinh || '9999'))
+        || laLanhDaoQuanLy(a.h.chuc_vu) - laLanhDaoQuanLy(b.h.chuc_vu) || (a.h.gioi_tinh !== 'Nữ') - (b.h.gioi_tinh !== 'Nữ'));
+    return { datDk, khongDat, nghiHuuDs };
+}
+
+function veDuKienXetNL(vung, du) {
+    const nam = S.th.nam, namHT = new Date().getFullYear();
+    const ct = tinhChiTieu(du, nam);
+    const { datDk, khongDat, nghiHuuDs } = tinhDuKienXet(du, nam);
+    const conSuat = Math.max(0, ct.conLai);
+    const choXN = du.luong.filter(d => !d.da_xac_nhan && du.theoId[d.ho_so_id]).length;
+    vung.innerHTML = `
+    <div class="bo-loc"><label class="o hep"><span>Năm xét</span><select data-nam-th>${[namHT + 1, namHT, namHT - 1].map(y => `<option${y === nam ? ' selected' : ''}>${y}</option>`).join('')}</select></label></div>
+    <div class="tb" style="margin-bottom:12px">Danh sách do app tự rà soát theo Quy chế của Ban để Văn phòng tham mưu (khoản 1 Điều 13). Mức rút ngắn được gợi ý từ nội dung khen thưởng; <b>Hội đồng xem xét, quyết định</b>. ${theChiTieu(ct, nam)}</div>
+    ${choXN ? `<div class="loi" style="margin-bottom:12px;border-left-color:var(--vang);background:var(--vang-nhat);color:var(--muc)">Còn ${choXN} dòng diễn biến lương chờ xác nhận. Kết quả rà soát "không hai lần liên tiếp" chỉ chính xác khi hình thức nâng đã được khai đúng.</div>` : ''}
+    <section class="tam"><h2>Đủ điều kiện xét năm ${nam} <small>${datDk.length} người, xếp theo thứ tự ưu tiên Điều 11</small>
+        <span class="nhom-nut"><button class="nut nut-nho" type="button" data-xuat-dk="excel">Xuất Excel</button><button class="nut nut-nho" type="button" data-xuat-dk="word">Xuất Word</button></span></h2>
+        ${datDk.length ? `<div class="cuon-ngang"><table class="bang bang-the"><thead><tr><th>TT</th><th>Cán bộ</th><th>Đang hưởng</th><th>Nâng thường xuyên</th><th>Thành tích cao nhất</th><th>Đề xuất</th><th></th></tr></thead><tbody>
+        ${datDk.map((m, i) => `<tr class="bam" data-id="${m.h.id}"><td class="so" data-nhan="TT">${i + 1}</td>
+            <td><b>${esc(m.h.ho_ten)}</b><br><small style="color:var(--mo)">${esc(m.h.chuc_vu || '')}</small></td>
+            <td data-nhan="Đang hưởng">${esc(bacHsVB(m.r.bac_luong, m.r.he_so))}<br><small style="color:var(--mo)">${esc(chuanNgach(m.r.ngach_luong) || '')}</small></td>
+            <td data-nhan="Thường xuyên">${esc(ngayVN(m.r.ngay_du_kien))}<br><small style="color:var(--mo)">còn thiếu ${m.thieu} tháng tính đến 31/12</small></td>
+            <td data-nhan="Thành tích">${esc(m.tt.ghi || m.tt.dong.map(k => `${k.noi_dung} (${ngayVN(k.ngay_quyet_dinh)})`).join('; '))}</td>
+            <td data-nhan="Đề xuất"><b>Rút ngắn ${m.tt.thang} tháng</b><br><small style="color:var(--mo)">hưởng bậc ${esc(m.r.bac_moi || '')} từ ${esc(ngayVN(congThang(m.r.ngay_du_kien, -m.tt.thang)))}</small></td>
+            <td>${i < conSuat ? '<span class="the-nho xanh">Trong chỉ tiêu</span>' : '<span class="the-nho">Ngoài chỉ tiêu</span>'}</td></tr>`).join('')}</tbody></table></div>`
+        : '<p class="trong">Không có ai đủ điều kiện theo dữ liệu hiện có.</p>'}
+        <p style="margin:10px 0 0;color:var(--mo);font-size:13px">Tiêu chí ưu tiên (a) tại khoản 3 Điều 11 (người lập thành tích kỳ trước nhưng chưa được xét do vượt chỉ tiêu) app chưa có dữ liệu để xét, Hội đồng xem xét bổ sung. Điều kiện "hoàn thành nhiệm vụ trở lên" trong thời gian giữ bậc cũng cần Văn phòng đối chiếu kết quả đánh giá hằng năm.</p>
+    </section>
+    <section class="tam"><h2>Có thông báo nghỉ hưu, xem xét nâng trước thời hạn 12 tháng <small>Điều 9 Quy chế; không tính vào chỉ tiêu</small></h2>
+        ${nghiHuuDs.length ? `<div class="cuon-ngang"><table class="bang bang-the"><thead><tr><th>Cán bộ</th><th>Nghỉ hưu</th><th>Nâng thường xuyên</th><th>Đang hưởng</th></tr></thead><tbody>
+        ${nghiHuuDs.map(({ r, nh }) => `<tr class="bam" data-id="${r.hs.id}"><td><b>${esc(r.hs.ho_ten)}</b><br><small style="color:var(--mo)">${esc(r.hs.chuc_vu || '')}</small></td>
+            <td data-nhan="Nghỉ hưu">${esc(ngayVN(nh.ngay))}</td><td data-nhan="Thường xuyên">${esc(ngayVN(r.ngay_du_kien))}</td><td data-nhan="Đang hưởng">${esc(bacHsVB(r.bac_luong, r.he_so))}</td></tr>`).join('')}</tbody></table></div>`
+        : '<p class="trong">Không có trường hợp nào.</p>'}
+    </section>
+    <details class="tam"><summary style="cursor:pointer;font-weight:600">Còn thiếu từ 12 tháng trở xuống nhưng chưa đủ điều kiện (${khongDat.length} người)</summary>
+        ${khongDat.length ? `<div class="cuon-ngang" style="margin-top:12px"><table class="bang bang-the"><tbody>${khongDat.map(m => `<tr class="bam" data-id="${m.h.id}"><td><b>${esc(m.h.ho_ten)}</b></td><td>${esc(m.lyDo.join('; '))}</td></tr>`).join('')}</tbody></table></div>` : '<p class="trong">Không có.</p>'}
+    </details>`;
+    $('[data-nam-th]', vung).addEventListener('change', e => { S.th.nam = +e.target.value; veDuKienXetNL(vung, du); });
+    $$('tr[data-id]', vung).forEach(tr => tr.addEventListener('click', () => { location.hash = `#/ho-so/${tr.dataset.id}`; }));
+    $$('[data-xuat-dk]', vung).forEach(b => b.addEventListener('click', () => xuatDanhSach(b.dataset.xuatDk, {
+        tieuDe: 'Danh sách dự kiến xét nâng bậc lương trước thời hạn', phuDe: `Năm xét ${nam} — chỉ tiêu ${ct.tong} suất, đã dùng ${ct.daDung.length}`,
+        cot: [{ n: 'TT', w: 1 }, { n: 'Họ và tên', w: 4, canh: 'trai' }, { n: 'Chức vụ', w: 3.6, canh: 'trai' }, { n: 'Ngạch, bậc, hệ số đang hưởng', w: 4.4 },
+            { n: 'Thời điểm nâng thường xuyên', w: 3 }, { n: 'Thành tích', w: 5, canh: 'trai' }, { n: 'Đề xuất rút ngắn', w: 2.6 }],
+        dong: datDk.map((m, i) => [i + 1, m.h.ho_ten, m.h.chuc_vu || '', `${chuanNgach(m.r.ngach_luong) || ''}, ${bacHsVB(m.r.bac_luong, m.r.he_so)}`, ngayVN(m.r.ngay_du_kien),
+            m.tt.ghi || m.tt.dong.map(k => `${k.noi_dung} (${ngayVN(k.ngay_quyet_dinh)})`).join('; '), `${m.tt.thang} tháng`]),
+    }, 'dkx')));
+}
+
+// Rà soát diễn biến lương: Admin xem gợi ý và xác nhận các dòng chờ
+function veRaSoatNL(vung, du) {
+    const cho = [];
+    Object.entries(du.theoHs).forEach(([hid, a]) => {
+        const h = du.theoId[hid];
+        if (!h) return;
+        const lhh = du.rows.find(r => r.ho_so_id === hid);
+        const gy = goiYDienBien(a, h, lhh);
+        a.filter(d => !d.da_xac_nhan).forEach(d => cho.push({ d, h, g: gy[d.id] }));
+    });
+    cho.sort((a, b) => a.h.ho_ten.localeCompare(b.h.ho_ten, 'vi') || String(a.d.ngay_quyet_dinh).localeCompare(String(b.d.ngay_quyet_dinh)));
+    const chon = (name, val, ds) => `<select name="${name}" class="o-nho"><option value="">— Chọn —</option>${ds.map(x => `<option${x === val ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select>`;
+    vung.innerHTML = `
+    <div class="tb" style="margin-bottom:12px">Các dòng diễn biến lương do cán bộ tự khai hoặc chuyển từ app cũ, <b>chưa được tính vào thống kê</b>. App gợi ý ngạch và hình thức nâng dựa vào hệ số, số bậc và khoảng cách giữa hai lần nâng; ngày trong diễn biến thường là ngày ký quyết định nên có thể lệch vài tháng. Đề nghị đối chiếu quyết định trước khi xác nhận.</div>
+    <section class="tam"><h2>Chờ xác nhận <small>${cho.length} dòng</small>
+        ${cho.length ? '<span class="nhom-nut"><button class="nut nut-nho" type="button" data-chon-het>Chọn tất cả</button><button class="nut nut-chinh nut-nho" type="button" data-xac-nhan-chon>Xác nhận các dòng đã chọn</button></span>' : ''}</h2>
+        ${cho.length ? `<div class="cuon-ngang"><table class="bang bang-the bang-ra-soat"><thead><tr><th></th><th>Cán bộ</th><th>Ngày QĐ</th><th>Bậc, hệ số</th><th>Ngạch</th><th>Mã ngạch</th><th>Hình thức nâng</th><th>Rút ngắn (tháng)</th><th>Năm xét</th></tr></thead><tbody>
+        ${cho.map(({ d, h, g }) => {
+            const ht = d.hinh_thuc || g.hinh_thuc || '';
+            const khac = d.hinh_thuc && g.hinh_thuc && d.hinh_thuc !== g.hinh_thuc;
+            return `<tr data-dong="${d.id}"><td><input type="checkbox" data-chon-dong style="width:20px;height:20px" aria-label="Chọn dòng"></td>
+            <td><a href="#/ho-so/${h.id}"><b>${esc(h.ho_ten)}</b></a></td>
+            <td data-nhan="Ngày QĐ">${esc(ngayVN(d.ngay_quyet_dinh) || 'Chưa ghi')}</td>
+            <td data-nhan="Bậc, hệ số">${esc(bacHsVB(d.bac_luong, d.he_so))}</td>
+            <td data-nhan="Ngạch"><input name="ngach_luong" class="o-nho" list="dl_ngach_rs" value="${esc(d.ngach_luong || g.ngach_luong || '')}"></td>
+            <td data-nhan="Mã ngạch"><input name="ma_ngach" class="o-nho" style="width:80px" value="${esc(d.ma_ngach || g.ma_ngach || '')}"></td>
+            <td data-nhan="Hình thức">${chon('hinh_thuc', ht, DS_HINH_THUC_NANG)}<br><small style="color:${khac ? 'var(--do)' : 'var(--mo)'}">${khac ? `Cán bộ khai khác gợi ý (${esc(g.hinh_thuc)}). ` : ''}${esc(g.ly_do)}</small></td>
+            <td data-nhan="Rút ngắn"><input name="rut_ngan_thang" class="o-nho" inputmode="numeric" style="width:60px" value="${esc(d.rut_ngan_thang ?? g.rut_ngan_thang ?? '')}"></td>
+            <td data-nhan="Năm xét"><input name="nam_xet" class="o-nho" inputmode="numeric" style="width:70px" value="${esc(d.nam_xet ?? (HT_DAC_BIET.includes(ht) ? namXetTuNgay(d.ngay_quyet_dinh) : '') ?? '')}" data-ngay="${esc(d.ngay_quyet_dinh || '')}"></td></tr>`;
+        }).join('')}</tbody></table><datalist id="dl_ngach_rs">${[...new Set([...Object.values(TEN_NHOM_NGACH).map(x => x[0]).filter(Boolean), ...DS_NGACH_LUONG.map(chuanNgach)])].map(x => `<option value="${esc(x)}">`).join('')}</datalist></div>`
+        : '<p class="trong">Không còn dòng nào chờ xác nhận.</p>'}
+    </section>`;
+    $('[data-chon-het]', vung)?.addEventListener('click', () => $$('[data-chon-dong]', vung).forEach(c => { c.checked = true; }));
+    $$('tr[data-dong] select[name="hinh_thuc"]', vung).forEach(sel => sel.addEventListener('change', () => {
+        const t = sel.closest('tr'), nx = $('[name="nam_xet"]', t);
+        if (HT_DAC_BIET.includes(sel.value) && !nx.value) nx.value = namXetTuNgay(nx.dataset.ngay) || '';
+        $('[data-chon-dong]', t).checked = true;
+    }));
+    $('[data-xac-nhan-chon]', vung)?.addEventListener('click', async e => {
+        const tr = $$('tr[data-dong]', vung).filter(t => $('[data-chon-dong]', t).checked);
+        if (!tr.length) return thongBao('Chọn ít nhất một dòng.', true);
+        const capNhat = [];
+        for (const t of tr) {
+            const g = n => String($(`[name="${n}"]`, t).value || '').trim();
+            const ht = g('hinh_thuc'), rn = g('rut_ngan_thang'), nx = g('nam_xet');
+            if (!ht) return thongBao(`Dòng ${t.querySelector('b').textContent} chưa chọn hình thức nâng.`, true);
+            if (rn && !(/^\d+$/.test(rn) && +rn >= 1 && +rn <= 12)) return thongBao('Số tháng rút ngắn phải từ 1 đến 12.', true);
+            if (nx && !/^\d{4}$/.test(nx)) return thongBao('Năm xét ghi 4 chữ số.', true);
+            capNhat.push({ id: t.dataset.dong, du: { ngach_luong: g('ngach_luong') || null, ma_ngach: g('ma_ngach') || null, hinh_thuc: ht,
+                rut_ngan_thang: ht.startsWith('Trước thời hạn') && rn ? +rn : null,
+                nam_xet: HT_DAC_BIET.includes(ht) ? (nx ? +nx : namXetTuNgay($('[name="nam_xet"]', t).dataset.ngay)) : null } });
+        }
+        e.target.disabled = true;
+        try {
+            for (let i = 0; i < capNhat.length; i += 8) await Promise.all(capNhat.slice(i, i + 8).map(c => q(sb.from('hs_luong').update(c.du).eq('id', c.id))));
+            thongBao(`Đã xác nhận ${capNhat.length} dòng.`);
+            du.napLai();
+        } catch (err) { e.target.disabled = false; thongBao(dichLoi(err), true); }
+    });
+}
+
+// Form Diễn biến lương trên hồ sơ: chỉ hiện ô rút ngắn, năm xét khi cần
+function ganDienBienLuong(form) {
+    const o = k => form.elements[k];
+    const capNhat = () => {
+        const ht = o('hinh_thuc').value;
+        o('rut_ngan_thang').closest('.o').classList.toggle('an', !ht.startsWith('Trước thời hạn'));
+        o('nam_xet').closest('.o').classList.toggle('an', !HT_DAC_BIET.includes(ht));
+        if (HT_DAC_BIET.includes(ht) && !o('nam_xet').value && o('ngay_quyet_dinh').value) o('nam_xet').value = namXetTuNgay(o('ngay_quyet_dinh').value);
+    };
+    o('hinh_thuc').addEventListener('change', capNhat);
+    capNhat();
+}
+
+// ─────────────────────────────────────────────────────────
 // 10. TRANG CẢNH BÁO (Admin)
 // ─────────────────────────────────────────────────────────
 S.cb = { tab: 'nl', khoang: { nl: 'q3', nh: 'q12', kl: 'con-han' }, dv: '', loai: '' };
@@ -1350,7 +1748,7 @@ async function xuatDanhSach(kieu, b, loai) {
     if (!window.XuatFile) return thongBao('Chưa tải được module xuất file. Tải lại trang rồi thử lại.', true);
     let luu = {};
     try { luu = JSON.parse(localStorage.getItem('hs_xuat_ky') || '{}'); } catch (_) { /* bỏ qua */ }
-    const tenFile = { nl: 'DanhSach_NangLuong', nh: 'DanhSach_NghiHuu', kl: 'DanhSach_KyLuat', bth: 'BieuTongHop_DienBienLuong' }[loai] + '_' + homNayISO().replace(/-/g, '');
+    const tenFile = { nl: 'DanhSach_NangLuong', nh: 'DanhSach_NghiHuu', kl: 'DanhSach_KyLuat', bth: 'BieuTongHop_DienBienLuong', th: 'DanhSach_NangLuongTruocThoiHan', dkx: 'DanhSach_DuKienXet_TruocThoiHan' }[loai] + '_' + homNayISO().replace(/-/g, '');
     await hopThoai({
         tieuDe: `Xuất ${kieu === 'word' ? 'Word' : 'Excel'}: ${b.dong.length} trường hợp`, nutChinh: kieu === 'word' ? 'Tải file Word' : 'Tải file Excel',
         noiDung: `<div class="luoi-o" style="grid-template-columns:1fr">
@@ -1681,23 +2079,32 @@ function ganKyLuat(form) {
 
 function veBangCon(vung, bang, rows, hoSoId, coQuyen, napLai) {
     const c = BANG_CON[bang];
+    const cot = c.cot.filter(f => !f.an);
+    const coXN = bang === 'hs_luong' && rows.some(r => 'da_xac_nhan' in r);
     vung.innerHTML = `
         ${coQuyen ? `<div class="nhom-nut" style="margin-bottom:12px"><button class="nut nut-nho" type="button" data-them-con>Thêm ${esc(c.don)}</button></div>` : ''}
-        ${rows.length ? `<div class="cuon-ngang"><table class="bang bang-the"><thead><tr>${c.cot.map(f => `<th>${esc(f.n)}</th>`).join('')}${coQuyen ? '<th></th>' : ''}</tr></thead><tbody>
-        ${rows.map(r => `<tr>${c.cot.map(f => `<td data-nhan="${esc(f.n)}"${f.loai === 'so' ? ' class="so"' : ''}>${esc(hienGiaTri(f, r[f.k]) || (f.k === 'den_ngay' && bang === 'hs_cong_tac' ? 'nay' : ''))}</td>`).join('')}
+        ${rows.length ? `<div class="cuon-ngang"><table class="bang bang-the"><thead><tr>${cot.map(f => `<th>${esc(f.n)}</th>`).join('')}${coXN ? '<th>Trạng thái</th>' : ''}${coQuyen ? '<th></th>' : ''}</tr></thead><tbody>
+        ${rows.map(r => `<tr>${cot.map(f => `<td data-nhan="${esc(f.n)}"${f.loai === 'so' ? ' class="so"' : ''}>${esc(hienGiaTri(f, r[f.k]) || (f.k === 'den_ngay' && bang === 'hs_cong_tac' ? 'nay' : ''))}${f.k === 'hinh_thuc' && r.rut_ngan_thang ? `<br><small style="color:var(--mo)">rút ngắn ${r.rut_ngan_thang} tháng</small>` : ''}</td>`).join('')}
+            ${coXN ? `<td data-nhan="Trạng thái">${r.da_xac_nhan ? '<span class="the-nho xanh">Đã xác nhận</span>' : '<span class="the-nho vang">Chờ xác nhận</span>'}</td>` : ''}
             ${coQuyen ? `<td class="thao-tac"><div class="nhom-nut" style="justify-content:flex-end"><button class="nut nut-nhe nut-nho" data-sua-con="${r.id}">Sửa</button><button class="nut nut-nhe nut-nho" data-xoa-con="${r.id}">Xóa</button></div></td>` : ''}</tr>`).join('')}
-        </tbody></table></div>` : `<p class="trong">Chưa có ${esc(c.don)} nào.${coQuyen ? ' Bấm nút Thêm để khai.' : ''}</p>`}`;
+        </tbody></table></div>${coXN ? `<p style="margin:8px 0 0;color:var(--mo);font-size:13px">${S.admin ? 'Dòng do quản trị viên nhập hoặc sửa được coi là đã xác nhận.' : 'Dòng do đồng chí khai hoặc sửa sẽ chờ Văn phòng Ban xác nhận trước khi tính vào thống kê.'}</p>` : ''}` : `<p class="trong">Chưa có ${esc(c.don)} nào.${coQuyen ? ' Bấm nút Thêm để khai.' : ''}</p>`}`;
 
     const moForm = async (r) => {
         const ok = await hopThoai({
             tieuDe: `${r ? 'Sửa' : 'Thêm'} ${c.don}`, nutChinh: r ? 'Lưu thay đổi' : 'Thêm',
             noiDung: `<div class="luoi-o" style="grid-template-columns:1fr 1fr">${c.cot.map(f => oNhap(f, r ? r[f.k] : (f.k === 'loai' ? 'Khen thưởng' : ''))).join('')}</div>`,
-            sauKhiMo: bang === 'hs_khen_thuong' ? ganKyLuat : null,
+            sauKhiMo: bang === 'hs_khen_thuong' ? ganKyLuat : bang === 'hs_luong' ? ganDienBienLuong : null,
             xuLy: async fd => {
                 const [du, loi] = docForm(fd, c.cot);
                 if (loi) return loi;
                 if (bang === 'hs_khen_thuong' && du.loai !== 'Kỷ luật') { du.he_thong = null; du.hinh_thuc = null; du.ngay_het_han = null; }
                 if (du.ngay_het_han && du.ngay_quyet_dinh && du.ngay_het_han < du.ngay_quyet_dinh) return 'Ngày hết thời hạn không thể trước ngày quyết định.';
+                if (bang === 'hs_luong') {
+                    if (!String(du.hinh_thuc || '').startsWith('Trước thời hạn')) du.rut_ngan_thang = null;
+                    else if (du.rut_ngan_thang !== null && (du.rut_ngan_thang < 1 || du.rut_ngan_thang > 12)) return 'Số tháng được rút ngắn phải từ 1 đến 12.';
+                    if (!HT_DAC_BIET.includes(du.hinh_thuc)) du.nam_xet = null;
+                    else if (du.nam_xet !== null && !(du.nam_xet >= 1990 && du.nam_xet <= 2100)) return 'Năm xét chưa đúng.';
+                }
                 if (r) await q(sb.from(bang).update(du).eq('id', r.id));
                 else await q(sb.from(bang).insert({ ...du, ho_so_id: hoSoId }));
             },

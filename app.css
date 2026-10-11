@@ -129,6 +129,17 @@ table.bang { width: 100%; border-collapse: collapse; font-size: 14px; }
 .chi-so { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 14px; margin-bottom: 18px; }
 .chi-so a { display: block; text-decoration: none; color: inherit; background: var(--giay); border: 1px solid var(--vien); border-radius: var(--r); padding: 16px 18px; }
 .chi-so a:hover { border-color: var(--muc); }
+.chi-so .o-so { display: block; background: var(--giay); border: 1px solid var(--vien); border-radius: var(--r); padding: 16px 18px; }
+.chi-so .o-so b { display: block; font-family: var(--serif); font-size: 34px; line-height: 1.1; color: var(--muc); }
+.chi-so .o-so.can-xu-ly b { color: var(--do); }
+.chi-so .o-so span { color: var(--muc-2); font-size: 14px; }
+.o-nho { min-height: 34px; padding: 4px 8px; border: 1px solid var(--vien); border-radius: 6px; background: #fff; font-size: 14px; max-width: 100%; }
+.o-nho:focus { border-color: var(--muc); outline: none; box-shadow: 0 0 0 3px rgba(245,166,35,.25); }
+.bang-ra-soat td { vertical-align: middle; }
+.bang-ra-soat select.o-nho { min-width: 200px; }
+.bang-ra-soat input[name="ngach_luong"] { width: 150px; }
+.bang-ra-soat td:nth-child(2) { min-width: 130px; }
+.bang-ra-soat td, .bang-ra-soat th { padding-left: 6px; padding-right: 6px; }
 .chi-so.bon { grid-template-columns: repeat(4, minmax(0,1fr)); }
 .chi-so b { display: block; font-family: var(--serif); font-size: 34px; line-height: 1.1; color: var(--muc); }
 .chi-so a.can-xu-ly b { color: var(--do); }
@@ -306,6 +317,11 @@ details.tam > summary::marker { color: var(--do); }
     .dau-trang h1 { font-size: 22px; }
     .chi-so, .chi-so.bon { grid-template-columns: 1fr; }
     .chi-so a { display: flex; align-items: baseline; gap: 12px; }
+    .chi-so .o-so { display: flex; align-items: baseline; gap: 12px; }
+    .chi-so .o-so b { font-size: 28px; }
+    .bang-ra-soat select.o-nho { min-width: 0; width: 100%; }
+    .bang-ra-soat input[name="ngach_luong"] { width: 100%; }
+    .bang-ra-soat td:nth-child(2) { min-width: 0; }
     .chi-so b { font-size: 28px; }
 
     .bia { grid-template-columns: 8px minmax(0,1fr); padding-right: 16px; gap: 0 14px; }
