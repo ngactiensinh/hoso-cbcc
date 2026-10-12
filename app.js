@@ -1,5 +1,5 @@
 /* =====================================================================
-   HỒ SƠ CBCC — BAN TUYÊN GIÁO TỈNH ỦY TUYÊN QUANG  (v8.3 — Thống kê nâng lương trước thời hạn)
+   HỒ SƠ CBCC — BAN TUYÊN GIÁO TỈNH ỦY TUYÊN QUANG  (v8.4 — Bỏ thông tin sức khỏe)
    GitHub Pages + Supabase (Auth + RLS)
    ===================================================================== */
 'use strict';
@@ -37,8 +37,6 @@ const DS_HOC_VI = ['Cử nhân', 'Kỹ sư', 'Thạc sĩ', 'Tiến sĩ'];
 const DS_QLNN = ['Chưa qua bồi dưỡng', 'Chuyên viên', 'Chuyên viên chính', 'Chuyên viên cao cấp'];
 const DS_NGACH = ['Chuyên viên cao cấp', 'Chuyên viên chính', 'Chuyên viên', 'Kế toán viên',
     'Kế toán viên trung cấp', 'Văn thư viên', 'Văn thư viên trung cấp', 'Nhân viên lái xe', 'Nhân viên phục vụ'];
-const DS_NHOM_MAU = ['A', 'B', 'AB', 'O'];
-const DS_SUC_KHOE = ['Tốt', 'Khá', 'Trung bình'];
 const DS_HINH_THUC_NANG = ['Xếp lương lần đầu', 'Thường xuyên', 'Trước thời hạn do thành tích', 'Trước thời hạn do thông báo nghỉ hưu',
     'Vượt một bậc', 'Phụ cấp vượt khung', 'Chuyển, nâng ngạch'];
 const DS_HINH_THUC = ['Chính quy', 'Vừa làm vừa học', 'Tại chức', 'Từ xa', 'Tập trung', 'Bồi dưỡng'];
@@ -95,7 +93,7 @@ const MUC = [
     ]},
     { ten: 'Đảng, đoàn thể, quân ngũ', truong: [
         ['ngay_vao_dang', 'Ngày vào Đảng', 'ngay'],
-        ['ngay_chinh_thuc', 'Ngày chính thức', 'ngay'],
+        ['ngay_chinh_thuc', 'Ngày vào Đảng chính thức', 'ngay'],
         ['tham_gia_tcctxh', 'Tham gia tổ chức chính trị - xã hội', 'chu', { goiY: 'Ví dụ: Đoàn TNCS Hồ Chí Minh, ngày 26/3/2005', rong: 1 }],
         ['ngay_nhap_ngu', 'Ngày nhập ngũ', 'ngay'],
         ['ngay_xuat_ngu', 'Ngày xuất ngũ', 'ngay'],
@@ -107,11 +105,7 @@ const MUC = [
         ['khen_thuong_tom_tat', 'Khen thưởng (hình thức cao nhất)', 'chu', { rong: 1 }],
         ['ky_luat_tom_tat', 'Kỷ luật (hình thức cao nhất)', 'chu', { rong: 1 }],
     ]},
-    { ten: 'Sức khỏe và chính sách', truong: [
-        ['suc_khoe', 'Tình trạng sức khỏe', 'goi_y', { ds: DS_SUC_KHOE }],
-        ['chieu_cao', 'Chiều cao (cm)', 'so', { nguyen: 1 }],
-        ['can_nang', 'Cân nặng (kg)', 'so', { nguyen: 1 }],
-        ['nhom_mau', 'Nhóm máu', 'chon', { ds: DS_NHOM_MAU }],
+    { ten: 'Chính sách', truong: [
         ['thuong_binh_hang', 'Thương binh hạng'],
         ['gia_dinh_chinh_sach', 'Con gia đình chính sách'],
     ]},
@@ -166,7 +160,7 @@ Object.values(BANG_CON).forEach(b => { b.cot = b.cot.map(truong); });
 const MUC_HOAN_THIEN = ['ho_ten', 'ngay_sinh', 'gioi_tinh', 'noi_sinh', 'que_quan', 'dan_toc', 'ton_giao',
     'thuong_tru', 'noi_o_hien_nay', 'so_cccd', 'so_bhxh', 'don_vi', 'chuc_vu', 'ngay_tuyen_dung',
     'ngach_cong_chuc', 'ma_ngach', 'bac_luong', 'he_so_luong', 'giao_duc_pt', 'trinh_do_chuyen_mon',
-    'ly_luan_chinh_tri', 'ngoai_ngu', 'tin_hoc', 'suc_khoe'];
+    'ly_luan_chinh_tri', 'ngoai_ngu', 'tin_hoc'];
 
 // ─────────────────────────────────────────────────────────
 // 3. TIỆN ÍCH
@@ -2182,7 +2176,7 @@ async function trangSua(trang, id) {
         if (du.so_bhxh && !/^(\d{10}|\d{12})$/.test(du.so_bhxh)) return baoLoi('Mã số BHXH gồm 12 chữ số (số định danh cá nhân) hoặc 10 chữ số (mã cũ).');
         const homNay = new Date().toISOString().slice(0, 10);
         if (du.ngay_sinh && du.ngay_sinh >= homNay) return baoLoi('Ngày sinh phải trước ngày hôm nay.');
-        if (du.ngay_vao_dang && du.ngay_chinh_thuc && du.ngay_chinh_thuc < du.ngay_vao_dang) return baoLoi('Ngày chính thức không thể trước ngày vào Đảng.');
+        if (du.ngay_vao_dang && du.ngay_chinh_thuc && du.ngay_chinh_thuc < du.ngay_vao_dang) return baoLoi('Ngày vào Đảng chính thức không thể trước ngày vào Đảng.');
         if (du.ngay_nhap_ngu && du.ngay_xuat_ngu && du.ngay_xuat_ngu < du.ngay_nhap_ngu) return baoLoi('Ngày xuất ngũ không thể trước ngày nhập ngũ.');
         du.ho_ten = du.ho_ten.replace(/\s+/g, ' ');
         nut.disabled = true;
