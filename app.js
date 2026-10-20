@@ -1,5 +1,5 @@
 /* =====================================================================
-   HỒ SƠ CBCC — BAN TUYÊN GIÁO TỈNH ỦY TUYÊN QUANG  (v8.4 — Bỏ thông tin sức khỏe)
+   HỒ SƠ CBCC — BAN TUYÊN GIÁO TỈNH ỦY TUYÊN QUANG  (v8.5 — Chỉnh thứ tự các mục kê khai)
    GitHub Pages + Supabase (Auth + RLS)
    ===================================================================== */
 'use strict';
@@ -117,14 +117,14 @@ const MUC = [
 const TRUONG = Object.fromEntries(MUC.flatMap(m => m.truong).map(f => [f.k, f]));
 
 const BANG_CON = {
-    hs_cong_tac: { ten: 'Quá trình công tác', don: 'quá trình công tác', thuTu: 'id', cot: [
+    hs_cong_tac: { ten: 'Quá trình công tác', don: 'quá trình công tác', thuTu: 'thu_tu', cot: [
         ['tu_ngay', 'Từ tháng/năm', 'chu', { goiY: 'Ví dụ: 03/2015' }],
         ['den_ngay', 'Đến tháng/năm', 'chu', { goiY: 'Để trống nếu đến nay' }],
         ['vi_tri', 'Chức danh, chức vụ', 'chu', { bat: 1 }],
         ['don_vi', 'Đơn vị công tác', 'chu', { rong: 1 }],
         ['quyet_dinh_so', 'Quyết định số'],
     ]},
-    hs_dao_tao: { ten: 'Đào tạo, bồi dưỡng', don: 'khóa đào tạo, bồi dưỡng', thuTu: 'id', cot: [
+    hs_dao_tao: { ten: 'Đào tạo, bồi dưỡng', don: 'khóa đào tạo, bồi dưỡng', thuTu: 'thu_tu', cot: [
         ['ten_truong', 'Tên trường', 'chu', { bat: 1, rong: 1 }],
         ['nganh_hoc', 'Chuyên ngành đào tạo, bồi dưỡng', 'chu', { rong: 1 }],
         ['tu_ngay', 'Từ tháng/năm'],
@@ -132,8 +132,8 @@ const BANG_CON = {
         ['hinh_thuc', 'Hình thức', 'goi_y', { ds: DS_HINH_THUC }],
         ['van_bang', 'Văn bằng, chứng chỉ'],
     ]},
-    hs_luong: { ten: 'Diễn biến lương', don: 'mốc lương', thuTu: 'ngay_quyet_dinh', cot: [
-        ['ngay_quyet_dinh', 'Ngày quyết định', 'ngay'],
+    hs_luong: { ten: 'Diễn biến lương', don: 'mốc lương', thuTu: 'thu_tu', cot: [
+        ['ngay_quyet_dinh', 'Ngày quyết định', 'ngay', { ngan: 'Ngày QĐ' }],
         ['bac_luong', 'Bậc lương'],
         ['he_so', 'Hệ số', 'so'],
         ['ngach_luong', 'Ngạch', 'goi_y', { ds: ['Chuyên viên cao cấp', 'Chuyên viên chính', 'Chuyên viên', 'Kế toán viên', 'Kế toán viên trung cấp', 'Văn thư viên', 'Văn thư viên trung cấp', 'Nhân viên lái xe', 'Nhân viên phục vụ'] }],
@@ -141,10 +141,10 @@ const BANG_CON = {
         ['hinh_thuc', 'Hình thức nâng', 'chon', { ds: DS_HINH_THUC_NANG }],
         ['rut_ngan_thang', 'Số tháng được rút ngắn', 'so', { nguyen: 1, an: 1, goiY: 'Từ 1 đến 12 tháng, theo quyết định' }],
         ['nam_xet', 'Năm xét chỉ tiêu', 'so', { nguyen: 1, an: 1, goiY: 'Năm xét nâng trước thời hạn (quyết định ký quý I thường thuộc năm xét trước)' }],
-        ['ngay_nang_bac_tiep_theo', 'Ngày tính nâng bậc tiếp theo', 'ngay'],
-        ['quyet_dinh_so', 'Quyết định số'],
+        ['ngay_nang_bac_tiep_theo', 'Ngày tính nâng bậc tiếp theo', 'ngay', { ngan: 'Nâng bậc tiếp theo' }],
+        ['quyet_dinh_so', 'Quyết định số', 'chu', { ngan: 'Số QĐ' }],
     ]},
-    hs_khen_thuong: { ten: 'Khen thưởng, kỷ luật', don: 'khen thưởng/kỷ luật', thuTu: 'ngay_quyet_dinh', cot: [
+    hs_khen_thuong: { ten: 'Khen thưởng, kỷ luật', don: 'khen thưởng/kỷ luật', thuTu: 'thu_tu', cot: [
         ['ngay_quyet_dinh', 'Ngày quyết định', 'ngay'],
         ['loai', 'Loại', 'chon', { ds: ['Khen thưởng', 'Kỷ luật'], bat: 1 }],
         ['quyet_dinh_so', 'Quyết định số'],
@@ -187,6 +187,7 @@ async function q(p) {
 function dichLoi(e) {
     const m = String(e?.message || e || '');
     if (/Invalid login credentials/i.test(m)) return 'Sai mật khẩu.';
+    if (/thu_tu/.test(m) && /column|cột/i.test(m)) return 'Chưa chạy file sql/07_thu_tu_ke_khai.sql trong Supabase.';
     if (/already registered|already been registered/i.test(m)) return 'Mã CBCC này đã được đăng ký.';
     if (/at least 6|Password should be/i.test(m)) return 'Mật khẩu phải có ít nhất 6 ký tự.';
     if (/duplicate key/i.test(m)) return 'Dữ liệu bị trùng: mã này đã tồn tại.';
@@ -2077,8 +2078,8 @@ function veBangCon(vung, bang, rows, hoSoId, coQuyen, napLai) {
     const coXN = bang === 'hs_luong' && rows.some(r => 'da_xac_nhan' in r);
     vung.innerHTML = `
         ${coQuyen ? `<div class="nhom-nut" style="margin-bottom:12px"><button class="nut nut-nho" type="button" data-them-con>Thêm ${esc(c.don)}</button></div>` : ''}
-        ${rows.length ? `<div class="cuon-ngang"><table class="bang bang-the"><thead><tr>${cot.map(f => `<th>${esc(f.n)}</th>`).join('')}${coXN ? '<th>Trạng thái</th>' : ''}${coQuyen ? '<th></th>' : ''}</tr></thead><tbody>
-        ${rows.map(r => `<tr>${cot.map(f => `<td data-nhan="${esc(f.n)}"${f.loai === 'so' ? ' class="so"' : ''}>${esc(hienGiaTri(f, r[f.k]) || (f.k === 'den_ngay' && bang === 'hs_cong_tac' ? 'nay' : ''))}${f.k === 'hinh_thuc' && r.rut_ngan_thang ? `<br><small style="color:var(--mo)">rút ngắn ${r.rut_ngan_thang} tháng</small>` : ''}</td>`).join('')}
+        ${rows.length ? `<div class="cuon-ngang"><table class="bang bang-the"><thead><tr><th>TT</th>${cot.map(f => `<th>${esc(f.ngan || f.n)}</th>`).join('')}${coXN ? '<th>Trạng thái</th>' : ''}${coQuyen ? '<th></th>' : ''}</tr></thead><tbody>
+        ${rows.map((r, i) => `<tr><td data-nhan="TT" class="o-tt"><span>${i + 1}</span>${coQuyen && rows.length > 1 ? `<span class="nhom-tt"><button type="button" class="nut nut-nhe nut-nho nut-tt" data-len="${i}" title="Đưa lên trên" aria-label="Đưa dòng ${i + 1} lên trên"${i === 0 ? ' disabled' : ''}>▲</button><button type="button" class="nut nut-nhe nut-nho nut-tt" data-xuong="${i}" title="Đưa xuống dưới" aria-label="Đưa dòng ${i + 1} xuống dưới"${i === rows.length - 1 ? ' disabled' : ''}>▼</button></span>` : ''}</td>${cot.map(f => `<td data-nhan="${esc(f.n)}"${f.loai === 'so' ? ' class="so"' : ''}>${esc(hienGiaTri(f, r[f.k]) || (f.k === 'den_ngay' && bang === 'hs_cong_tac' ? 'nay' : ''))}${f.k === 'hinh_thuc' && r.rut_ngan_thang ? `<br><small style="color:var(--mo)">rút ngắn ${r.rut_ngan_thang} tháng</small>` : ''}</td>`).join('')}
             ${coXN ? `<td data-nhan="Trạng thái">${r.da_xac_nhan ? '<span class="the-nho xanh">Đã xác nhận</span>' : '<span class="the-nho vang">Chờ xác nhận</span>'}</td>` : ''}
             ${coQuyen ? `<td class="thao-tac"><div class="nhom-nut" style="justify-content:flex-end"><button class="nut nut-nhe nut-nho" data-sua-con="${r.id}">Sửa</button><button class="nut nut-nhe nut-nho" data-xoa-con="${r.id}">Xóa</button></div></td>` : ''}</tr>`).join('')}
         </tbody></table></div>${coXN ? `<p style="margin:8px 0 0;color:var(--mo);font-size:13px">${S.admin ? 'Dòng do quản trị viên nhập hoặc sửa được coi là đã xác nhận.' : 'Dòng do đồng chí khai hoặc sửa sẽ chờ Văn phòng Ban xác nhận trước khi tính vào thống kê.'}</p>` : ''}` : `<p class="trong">Chưa có ${esc(c.don)} nào.${coQuyen ? ' Bấm nút Thêm để khai.' : ''}</p>`}`;
@@ -2107,6 +2108,25 @@ function veBangCon(vung, bang, rows, hoSoId, coQuyen, napLai) {
     };
     $('[data-them-con]', vung)?.addEventListener('click', () => moForm(null));
     $$('[data-sua-con]', vung).forEach(b => b.addEventListener('click', () => moForm(rows.find(r => String(r.id) === b.dataset.suaCon))));
+    // Đổi thứ tự: hoán đổi số thứ tự của hai dòng kề nhau (đổi thứ tự dòng lương không làm dòng đó về "Chờ xác nhận")
+    const doiCho = async (i, j, nut) => {
+        if (j < 0 || j >= rows.length) return;
+        $$('.nut-tt', vung).forEach(x => { x.disabled = true; });
+        try {
+            const tt = rows.map(r => r.thu_tu);
+            const hong = tt.some(v => v === null || v === undefined) || new Set(tt).size !== tt.length;
+            if (hong) {   // số thứ tự trống hoặc trùng: đánh lại 1, 2, 3… theo thứ tự đang hiện rồi mới đổi
+                const moi = rows.map((_, k) => k + 1);
+                [moi[i], moi[j]] = [moi[j], moi[i]];
+                await Promise.all(rows.map((r, k) => q(sb.from(bang).update({ thu_tu: moi[k] }).eq('id', r.id))));
+            } else {
+                await Promise.all([q(sb.from(bang).update({ thu_tu: tt[j] }).eq('id', rows[i].id)), q(sb.from(bang).update({ thu_tu: tt[i] }).eq('id', rows[j].id))]);
+            }
+            await napLai();
+        } catch (e) { thongBao(dichLoi(e), true); $$('.nut-tt', vung).forEach(x => { x.disabled = false; }); }
+    };
+    $$('[data-len]', vung).forEach(b => b.addEventListener('click', () => doiCho(+b.dataset.len, +b.dataset.len - 1, b)));
+    $$('[data-xuong]', vung).forEach(b => b.addEventListener('click', () => doiCho(+b.dataset.xuong, +b.dataset.xuong + 1, b)));
     $$('[data-xoa-con]', vung).forEach(b => b.addEventListener('click', async () => {
         if (!await xacNhan(`Xóa ${c.don}`, `Xóa dòng này khỏi mục ${esc(c.ten.toLowerCase())}?`, 'Xóa')) return;
         try { await q(sb.from(bang).delete().eq('id', b.dataset.xoaCon)); thongBao('Đã xóa.'); await napLai(); } catch (e) { thongBao(dichLoi(e), true); }
@@ -2115,13 +2135,14 @@ function veBangCon(vung, bang, rows, hoSoId, coQuyen, napLai) {
 
 async function veNhatKy(vung, hoSoId) {
     vung.innerHTML = '<div class="dang-tai">Đang tải…</div>';
-    const [nk, tk] = await Promise.all([
-        q(sb.from('hs_nhat_ky').select('*').eq('ho_so_id', hoSoId).order('thoi_gian', { ascending: false }).limit(50)),
+    let [nk, tk] = await Promise.all([
+        q(sb.from('hs_nhat_ky').select('*').eq('ho_so_id', hoSoId).order('thoi_gian', { ascending: false }).limit(80)),
         q(sb.from('hs_tai_khoan').select('user_id, ho_ten')),
     ]);
     const ten = Object.fromEntries(tk.map(t => [t.user_id, t.ho_ten]));
     const tenBang = { hs_ho_so: 'Hồ sơ chính', ...Object.fromEntries(Object.entries(BANG_CON).map(([b, c]) => [b, c.ten])) };
-    const nhanTruong = (bang, k) => (bang === 'hs_ho_so' ? TRUONG[k]?.n : BANG_CON[bang]?.cot.find(f => f.k === k)?.n) || (k === 'anh_the' ? 'Ảnh thẻ' : k === 'ma_cbcc' ? 'Mã cán bộ' : k === 'user_id' ? 'Tài khoản gắn' : k);
+    nk = nk.filter(r => !(r.thao_tac === 'Sửa' && r.thay_doi && Object.keys(r.thay_doi).every(k => k === 'thu_tu'))).slice(0, 50);
+    const nhanTruong = (bang, k) => (bang === 'hs_ho_so' ? TRUONG[k]?.n : BANG_CON[bang]?.cot.find(f => f.k === k)?.n) || (k === 'anh_the' ? 'Ảnh thẻ' : k === 'ma_cbcc' ? 'Mã cán bộ' : k === 'user_id' ? 'Tài khoản gắn' : k === 'thu_tu' ? 'Thứ tự' : k);
     const ngan = v => { const s = v === null || v === undefined || v === '' ? '(trống)' : String(v); return s.length > 60 ? s.slice(0, 60) + '…' : s; };
     const moTa = r => {
         if (r.thao_tac === 'Sửa') return Object.entries(r.thay_doi || {}).map(([k, v]) => `${nhanTruong(r.bang, k)}: “${ngan(v.cu)}” thành “${ngan(v.moi)}”`).join('; ');

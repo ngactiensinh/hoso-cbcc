@@ -365,3 +365,16 @@ details.tam > summary::marker { color: var(--do); }
     .thanh-ben, .thanh-tren, .thanh-duoi, .nhom-nut, .tab, .khung-anh label { display: none !important; }
     body { background: #fff; }
 }
+
+/* v8.5 — nút đổi thứ tự dòng kê khai */
+.nut-tt { min-width: 34px; padding-left: 0; padding-right: 0; font-size: 12px; }
+.nut-tt:disabled { opacity: .3; cursor: default; }
+td.o-tt { white-space: nowrap; }
+td.o-tt > span:first-child { display: inline-block; min-width: 18px; font-variant-numeric: tabular-nums; }
+.nhom-tt { display: inline-flex; gap: 2px; margin-left: 4px; vertical-align: middle; }
+.nhom-tt .nut-tt { min-height: 30px; min-width: 28px; }
+@media (max-width: 860px) {
+    .bang-the td.o-tt { display: flex; align-items: center; gap: 6px; }
+    .nhom-tt { margin-left: auto; gap: 8px; }
+    .nhom-tt .nut-tt { min-height: 38px; min-width: 44px; }
+}
