@@ -53,6 +53,20 @@ const para = (noiDung, { canh = 'center', truoc = 0, sau = 0, dong = 240 } = {})
 
 // Đường kẻ bằng Line shape (wps), nằm cùng dòng, canh giữa theo đoạn
 let soHinh = 0;
+// Đường kẻ nổi (anchor) canh giữa cột, sát dưới dòng chữ phía trên — đúng như văn bản mẫu của Ban
+function duongKeNoi(daiCm) {
+    soHinh += 1;
+    const cx = Math.round(daiCm * EMU_CM);
+    return `<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:noProof/><w:sz w:val="4"/></w:rPr><w:drawing>
+<wp:anchor distT="0" distB="0" distL="114300" distR="114300" simplePos="0" relativeHeight="${251658240 + soHinh}" behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1">
+<wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="column"><wp:align>center</wp:align></wp:positionH><wp:positionV relativeFrom="paragraph"><wp:posOffset>22000</wp:posOffset></wp:positionV>
+<wp:extent cx="${cx}" cy="0"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:wrapNone/><wp:docPr id="${soHinh}" name="Đường kẻ ${soHinh}"/><wp:cNvGraphicFramePr/>
+<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+<a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">
+<wps:wsp><wps:cNvCnPr/><wps:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="0"/></a:xfrm>
+<a:prstGeom prst="line"><a:avLst/></a:prstGeom><a:ln w="9525"><a:solidFill><a:srgbClr val="000000"/></a:solidFill></a:ln></wps:spPr>
+<wps:bodyPr/></wps:wsp></a:graphicData></a:graphic></wp:anchor></w:drawing></w:r></w:p>`;
+}
 function duongKe(daiCm) {
     soHinh += 1;
     const cx = Math.round(daiCm * EMU_CM);
@@ -188,25 +202,34 @@ const doanVB = (doan, { canh = 'both', thut = true, sau = 120, truoc = 0 } = {})
 };
 const giuaVB = (t, o = {}) => doanVB([[t, o]], { canh: 'center', thut: false, sau: 0 });
 const trongVB = () => '<w:p><w:pPr><w:spacing w:after="0"/></w:pPr></w:p>';
+// Theo văn bản mẫu của Ban: thân bài cách dòng chính xác 18pt, cách trên 6pt, thụt đầu dòng 1 cm, căn đều
+const doan18 = (runs, jc, them = '') => `<w:p><w:pPr><w:spacing w:before="${them ? 120 : 0}" w:after="0" w:line="360" w:lineRule="exact"/>${them}${jc ? `<w:jc w:val="${jc}"/>` : ''}</w:pPr>${runs}</w:p>`;
+const thanVB = doan => doan18(typeof doan === 'string' ? runVB(doan) : doan.map(([t, o]) => runVB(t, o)).join(''), 'both', '<w:ind w:firstLine="567"/>');
+const giua18 = (t, o = {}) => doan18(runVB(t, o), 'center');
+const trong18 = () => doan18('', '');
+const thuong = (t, o = {}) => `<w:p><w:pPr><w:jc w:val="center"/></w:pPr>${t ? runVB(t, o) : ''}</w:p>`;   // đoạn mặc định (phần đầu, khối ký)
+const dongTrong = n => Array.from({ length: n }, () => '<w:p/>').join('');
 
 // Phần đầu: [Tỉnh ủy / Ban / * / Số hiệu] | [ĐCSVN / đường kẻ / địa danh, ngày tháng]
+// ngay để trống ('') thì in khoảng trắng để điền tay khi ký
 function dauVB({ soHieu, ngay, thang, nam }) {
-    const trai = giuaVB('TỈNH ỦY TUYÊN QUANG') + giuaVB('BAN TUYÊN GIÁO', { b: true }) + giuaVB('*') + (soHieu ? giuaVB(soHieu) : '');
-    const phai = giuaVB('ĐẢNG CỘNG SẢN VIỆT NAM', { b: true }) + duongKe(6.9)
-        + doanVB([[`Tuyên Quang, ngày ${ngay} tháng ${thangVB(thang)} năm ${nam}`, { i: true }]], { canh: 'center', thut: false, sau: 0, truoc: 60 });
+    const trai = thuong('TỈNH ỦY TUYÊN QUANG') + thuong('BAN TUYÊN GIÁO', { b: true }) + thuong('*') + (soHieu ? thuong(soHieu) : '');
+    const phai = thuong('ĐẢNG CỘNG SẢN VIỆT NAM', { b: true }) + duongKeNoi(6.9) + thuong('')
+        + thuong(`Tuyên Quang, ngày ${ngay || '       '} tháng ${thangVB(thang)} năm ${nam}`, { i: true });
     return bangKhongVien([{ w: W_TRAI_DOC, noiDung: trai }, { w: W_PHAI_DOC, noiDung: phai }]).replace(`w:w="${W_VUNG}"`, `w:w="${W_DOC}"`);
 }
-const tenLoaiVB = (d1, d2) => trongVB() + giuaVB(d1, { b: true }) + (d2 ? giuaVB(d2, { b: true }) : '') + doanVB('-----', { canh: 'center', thut: false, sau: 200 });
+const tenLoaiVB = (d1, d2, soDongTrong = 2) => Array.from({ length: soDongTrong }, trong18).join('')
+    + giua18(d1, { b: true }) + (d2 ? giua18(d2, { b: true }) : '') + giua18('-----');
 
 function khoiKyVB(noiNhan, chucDanh, ten) {
     const trai = doanVB([['Nơi nhận:', { u: true }]], { canh: 'left', thut: false, sau: 0 })
         + noiNhan.map(t => `<w:p><w:pPr><w:spacing w:after="0"/></w:pPr><w:r><w:rPr><w:sz w:val="24"/></w:rPr><w:t xml:space="preserve">- ${xml(t)}</w:t></w:r></w:p>`).join('');
     const phai = String(chucDanh || '').split('\n').filter(Boolean).map(t => giuaVB(t.toUpperCase(), { b: true })).join('')
-        + trongVB() + trongVB() + trongVB() + giuaVB(ten || '', { b: true });
+        + dongTrong(5) + giuaVB(ten || '', { b: true });
     return bangKhongVien([{ w: W_TRAI_DOC, noiDung: trai }, { w: W_PHAI_DOC, noiDung: phai }]).replace(`w:w="${W_VUNG}"`, `w:w="${W_DOC}"`);
 }
 function kyHaiBenVB(t1, ten1, t2, ten2) {
-    const cot = (t, ten) => giuaVB(t, { b: true }) + trongVB() + trongVB() + trongVB() + giuaVB(ten || '', { b: true });
+    const cot = (t, ten) => thuong(t, { b: true }) + dongTrong(5) + thuong(ten || '', { b: true });
     return bangKhongVien([{ w: Math.round(W_DOC / 2), noiDung: cot(t1, ten1) }, { w: W_DOC - Math.round(W_DOC / 2), noiDung: cot(t2, ten2) }]).replace(`w:w="${W_VUNG}"`, `w:w="${W_DOC}"`);
 }
 
@@ -233,18 +256,18 @@ function cauDienBien(r, loai, tachDoi = false) {
 async function quyetDinh(r, loai, ch, d) {
     soHinh = 0;
     const t = [];
-    t.push(dauVB({ soHieu: `Số ${d.soQD || '      '}-QĐ/BTGTU`, ngay: d.ngayKy, thang: d.thangKy, nam: d.namKy }));
+    t.push(dauVB({ soHieu: `Số ${d.soQD || '          '}-QĐ/BTGTU`, ngay: d.deTrongNgay ? '' : d.ngayKy, thang: d.thangKy, nam: d.namKy }));
     t.push(tenLoaiVB('QUYẾT ĐỊNH', loai === 'thuong_xuyen' ? 'nâng lương thường xuyên đối với công chức' : 'nâng phụ cấp thâm niên vượt khung đối với công chức'));
-    t.push(doanVB(loai === 'thuong_xuyen' ? ch.can_cu_tx : ch.can_cu_vk));
-    t.push(doanVB(ch.can_cu_phan_cap));
-    t.push(doanVB(`Căn cứ Biên bản cuộc họp ngày ${d.ngayHopVN} của Hội đồng xét nâng bậc lương cơ quan Ban Tuyên giáo Tỉnh ủy;`));
-    t.push(doanVB('Xét đề nghị của Chánh Văn phòng Ban.'));
-    t.push(trongVB(), giuaVB('BAN TUYÊN GIÁO TỈNH ỦY', { b: true }), doanVB([['QUYẾT ĐỊNH', { b: true }]], { canh: 'center', thut: false, sau: 200 }));
-    t.push(doanVB([['Điều 1. ', { b: true }], [`Đồng chí ${r.ho_ten}${r.chuc_danh ? ', ' + r.chuc_danh : ''}. ${cauDienBien(r, loai)}`, {}]]));
-    t.push(doanVB(`Thời gian nâng bậc lương lần sau tính từ ngày ${ngayVBTuISO(r.ngay_dk)}.`));
+    t.push(thanVB(loai === 'thuong_xuyen' ? ch.can_cu_tx : ch.can_cu_vk));
+    t.push(thanVB(ch.can_cu_phan_cap));
+    t.push(thanVB(`Căn cứ Biên bản cuộc họp ngày ${d.ngayHopVN} của Hội đồng xét nâng bậc lương cơ quan Ban Tuyên giáo Tỉnh ủy;`));
+    t.push(thanVB('Xét đề nghị của Chánh Văn phòng Ban.'));
+    t.push(trong18(), giua18('BAN TUYÊN GIÁO TỈNH ỦY', { b: true }), giua18('QUYẾT ĐỊNH', { b: true }));
+    t.push(thanVB([['Điều 1. ', { b: true }], [`Đồng chí ${r.ho_ten}${r.chuc_danh ? ', ' + r.chuc_danh : ''}. ${cauDienBien(r, loai)}`, {}]]));
+    t.push(thanVB(`Thời gian nâng bậc lương lần sau tính từ ngày ${ngayVBTuISO(r.ngay_dk)}.`));
     const thiHanh = r.don_vi && /^Phòng /.test(r.don_vi) ? `${ch.phong_lien_quan}, ${r.don_vi}` : ch.phong_lien_quan;
-    t.push(doanVB([['Điều 2. ', { b: true }], [`${thiHanh} và đồng chí ${r.ho_ten} căn cứ Quyết định thi hành.`, {}]]));
-    t.push(trongVB(), khoiKyVB(ch.noi_nhan_qd, ch.chuc_danh_ky, ch.truong_ban));
+    t.push(thanVB([['Điều 2. ', { b: true }], [`${thiHanh} và đồng chí ${r.ho_ten} căn cứ Quyết định thi hành.`, {}]]));
+    t.push(trong18(), khoiKyVB(ch.noi_nhan_qd, ch.chuc_danh_ky, ch.truong_ban), trong18());
     return taoDocx(t.join(''));
 }
 
@@ -252,22 +275,22 @@ async function toTrinh(dsNhom, loai, ch, d) {
     soHinh = 0;
     const hanhDong = loai === 'thuong_xuyen' ? 'nâng bậc lương thường xuyên' : 'nâng phụ cấp thâm niên vượt khung';
     const t = [];
-    t.push(dauVB({ soHieu: `Số ${d.soTT || '      '}-TTr/BTGTU`, ngay: d.ngayKy, thang: d.thangKy, nam: d.namKy }));
+    t.push(dauVB({ soHieu: `Số ${d.soTT || '          '}-TTr/BTGTU`, ngay: d.deTrongNgay ? '' : d.ngayKy, thang: d.thangKy, nam: d.namKy }));
     t.push(tenLoaiVB('TỜ TRÌNH', `V/v đề nghị ${hanhDong}`));
-    t.push(doanVB([['Kính gửi: ', { i: true }], ['Ban Tổ chức Tỉnh ủy.', { b: true }]], { canh: 'left', thut: false, sau: 160 }).replace('<w:jc w:val="left"/>', '<w:ind w:firstLine="567"/><w:jc w:val="left"/>'));
-    t.push(doanVB(`${loai === 'vuot_khung' ? ch.can_cu_vk : ch.can_cu_tx} ${ch.can_cu_phan_cap} ${ch.can_cu_cong_van}`));
-    t.push(doanVB(`Căn cứ kết quả đánh giá xếp loại cán bộ, công chức năm ${Number(d.namKy) - 1}; Biên bản cuộc họp Hội đồng xét nâng lương của Ban Tuyên giáo Tỉnh ủy ngày ${d.ngayHopVN};`));
+    t.push(doan18(runVB('Kính gửi: ', { i: true }) + runVB('Ban Tổ chức Tỉnh ủy.', { b: true }), 'left', '<w:ind w:firstLine="567"/>'));
+    t.push(thanVB(`${loai === 'vuot_khung' ? ch.can_cu_vk : ch.can_cu_tx} ${ch.can_cu_phan_cap} ${ch.can_cu_cong_van}`));
+    t.push(thanVB(`Căn cứ kết quả đánh giá xếp loại cán bộ, công chức năm ${Number(d.namKy) - 1}; Biên bản cuộc họp Hội đồng xét nâng lương của Ban Tuyên giáo Tỉnh ủy ngày ${d.ngayHopVN};`));
     if (dsNhom.length === 1) {
         const r = dsNhom[0];
-        t.push(doanVB(`Ban Tuyên giáo Tỉnh ủy đề nghị Ban Tổ chức Tỉnh ủy thẩm định, trình Thường trực Tỉnh ủy xem xét Quyết định ${hanhDong} cho đồng chí ${r.ho_ten}${r.chuc_danh ? ', ' + r.chuc_danh : ''}.`));
-        t.push(doanVB(cauDienBien(r, loai)));
+        t.push(thanVB(`Ban Tuyên giáo Tỉnh ủy đề nghị Ban Tổ chức Tỉnh ủy thẩm định, trình Thường trực Tỉnh ủy xem xét Quyết định ${hanhDong} cho đồng chí ${r.ho_ten}${r.chuc_danh ? ', ' + r.chuc_danh : ''}.`));
+        t.push(thanVB(cauDienBien(r, loai)));
     } else {
-        t.push(doanVB(`Ban Tuyên giáo Tỉnh ủy đề nghị Ban Tổ chức Tỉnh ủy thẩm định, trình Thường trực Tỉnh ủy xem xét, Quyết định ${hanhDong} cho các đồng chí có tên sau:`));
-        dsNhom.forEach((r, i) => t.push(doanVB(`${i + 1}. Đồng chí ${r.ho_ten}${r.chuc_danh ? ', ' + r.chuc_danh : ''}. ${cauDienBien(r, loai)}`)));
+        t.push(thanVB(`Ban Tuyên giáo Tỉnh ủy đề nghị Ban Tổ chức Tỉnh ủy thẩm định, trình Thường trực Tỉnh ủy xem xét, Quyết định ${hanhDong} cho các đồng chí có tên sau:`));
+        dsNhom.forEach((r, i) => t.push(thanVB(`${i + 1}. Đồng chí ${r.ho_ten}${r.chuc_danh ? ', ' + r.chuc_danh : ''}. ${cauDienBien(r, loai)}`)));
     }
-    t.push(doanVB([['(Có Biên bản họp xét kèm theo)', { i: true }]], { canh: 'center', thut: false }));
-    t.push(doanVB('Ban Tuyên giáo Tỉnh ủy trân trọng đề nghị Ban Tổ chức Tỉnh ủy trình Thường trực Tỉnh ủy xem xét, quyết định.'));
-    t.push(trongVB(), khoiKyVB(ch.noi_nhan_tt, ch.chuc_danh_ky, ch.truong_ban));
+    t.push(giua18('(Có Biên bản họp xét kèm theo)', { i: true }));
+    t.push(thanVB('Ban Tuyên giáo Tỉnh ủy trân trọng đề nghị Ban Tổ chức Tỉnh ủy trình Thường trực Tỉnh ủy xem xét, quyết định.'));
+    t.push(trong18(), khoiKyVB(ch.noi_nhan_tt, ch.chuc_danh_ky, ch.truong_ban), trong18());
     return taoDocx(t.join(''));
 }
 
@@ -279,28 +302,28 @@ async function bienBan(dsNhom, loai, laLanhDao, ch, d) {
     const [nh, th, nm] = d.ngayHopISO.split('-').reverse();
     const ten = r => `đồng chí ${r.ho_ten}${r.chuc_danh ? ', ' + r.chuc_danh : ''}`;
     const t = [];
-    t.push(dauVB({ ngay: nh, thang: th, nam: nm }));
+    t.push(dauVB({ ngay: d.deTrongNgay ? '' : nh, thang: th, nam: nm }));
     t.push(tenLoaiVB('BIÊN BẢN', `Họp xét ${hanhDong} cho cán bộ, công chức`));
-    t.push(doanVB(dsNhom.length === 1
+    t.push(thanVB(dsNhom.length === 1
         ? `Vào hồi ${d.gioBatDau} phút, ngày ${d.ngayHopVN} tại ${ch.dia_diem} họp xét ${hanhDong} cho ${ten(dsNhom[0])}.`
         : `Vào hồi ${d.gioBatDau} phút, ngày ${d.ngayHopVN} tại ${ch.dia_diem} họp xét ${hanhDong} cho ${String(dsNhom.length).padStart(2, '0')} công chức, gồm: ${dsNhom.map(ten).join('; ')}.`));
-    t.push(doanVB([['I- THÀNH PHẦN', { b: true }]]));
-    String(ch.thanh_phan || '').split('\n').map(x => x.trim().replace(/^-\s*/, '')).filter(Boolean).forEach(x => t.push(doanVB(`- ${x}`, { sau: 60 })));
-    t.push(doanVB([['II- NỘI DUNG', { b: true }]]));
-    t.push(doanVB([['1. ', { b: true }], [`Đồng chí chủ trì thông qua ${canCuNgan}`, {}]]));
-    t.push(doanVB([['2. ', { b: true }], [`Hội đồng tiến hành rà soát tiêu chuẩn, điều kiện ${hanhDong}, đồng thời đối chiếu với kết quả nhận xét, đánh giá cán bộ năm ${Number(nm) - 1} ${dsNhom.length === 1 ? `của đồng chí ${dsNhom[0].ho_ten}` : 'của các đồng chí có tên trên'}.`, {}]]));
+    t.push(thanVB([['I- THÀNH PHẦN', { b: true }]]));
+    String(ch.thanh_phan || '').split('\n').map(x => x.trim().replace(/^-\s*/, '')).filter(Boolean).forEach(x => t.push(thanVB(`- ${x}`)));
+    t.push(thanVB([['II- NỘI DUNG', { b: true }]]));
+    t.push(thanVB([['1. ', { b: true }], [`Đồng chí chủ trì thông qua ${canCuNgan}`, {}]]));
+    t.push(thanVB([['2. ', { b: true }], [`Hội đồng tiến hành rà soát tiêu chuẩn, điều kiện ${hanhDong}, đồng thời đối chiếu với kết quả nhận xét, đánh giá cán bộ năm ${Number(nm) - 1} ${dsNhom.length === 1 ? `của đồng chí ${dsNhom[0].ho_ten}` : 'của các đồng chí có tên trên'}.`, {}]]));
     const ketLuan = laLanhDao
         ? 'Hội đồng xét nâng lương Ban Tuyên giáo Tỉnh ủy biểu quyết thống nhất đề nghị Ban Tổ chức Tỉnh ủy thẩm định, trình Thường trực Tỉnh ủy xem xét, Quyết định'
         : 'Hội đồng xét nâng lương Ban Tuyên giáo Tỉnh ủy biểu quyết thống nhất đề nghị Trưởng Ban Quyết định';
     if (dsNhom.length === 1) {
-        t.push(doanVB(`Sau khi thảo luận, xem xét, ${ketLuan} ${hanhDong} cho ${ten(dsNhom[0])}, cụ thể như sau:`));
-        cauDienBien(dsNhom[0], loai, true).forEach(x => t.push(doanVB(x)));
+        t.push(thanVB(`Sau khi thảo luận, xem xét, ${ketLuan} ${hanhDong} cho ${ten(dsNhom[0])}, cụ thể như sau:`));
+        cauDienBien(dsNhom[0], loai, true).forEach(x => t.push(thanVB(x)));
     } else {
-        t.push(doanVB(`Sau khi thảo luận, xem xét, ${ketLuan} ${hanhDong} cho các đồng chí có tên sau, cụ thể như sau:`));
-        dsNhom.forEach((r, i) => t.push(doanVB([[`${i + 1}. `, { b: true }], [`Đồng chí ${r.ho_ten}${r.chuc_danh ? ', ' + r.chuc_danh : ''}. ${cauDienBien(r, loai)}`, {}]])));
+        t.push(thanVB(`Sau khi thảo luận, xem xét, ${ketLuan} ${hanhDong} cho các đồng chí có tên sau, cụ thể như sau:`));
+        dsNhom.forEach((r, i) => t.push(thanVB([[`${i + 1}. `, { b: true }], [`Đồng chí ${r.ho_ten}${r.chuc_danh ? ', ' + r.chuc_danh : ''}. ${cauDienBien(r, loai)}`, {}]])));
     }
-    t.push(doanVB(`Cuộc họp kết thúc vào hồi ${d.gioKetThuc} phút cùng ngày. Biên bản đã được thông qua trước Hội đồng và được 100% thành viên nhất trí.`));
-    t.push(trongVB(), kyHaiBenVB('THƯ KÝ', ch.thu_ky, 'CHỦ TRÌ', ch.truong_ban));
+    t.push(thanVB(`Cuộc họp kết thúc vào hồi ${d.gioKetThuc} phút cùng ngày. Biên bản đã được thông qua trước Hội đồng và được 100% thành viên nhất trí.`));
+    t.push(trong18(), kyHaiBenVB('THƯ KÝ', ch.thu_ky, 'CHỦ TRÌ', ch.truong_ban), trong18());
     return taoDocx(t.join(''));
 }
 

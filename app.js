@@ -1,5 +1,5 @@
 /* =====================================================================
-   HỒ SƠ CBCC — BAN TUYÊN GIÁO TỈNH ỦY TUYÊN QUANG  (v8.5 — Chỉnh thứ tự các mục kê khai)
+   HỒ SƠ CBCC — BAN TUYÊN GIÁO TỈNH ỦY TUYÊN QUANG  (v8.6 — Phòng Thông tin - Tổng hợp; văn bản nâng lương theo mẫu)
    GitHub Pages + Supabase (Auth + RLS)
    ===================================================================== */
 'use strict';
@@ -20,7 +20,7 @@ const EMAIL_DOMAIN = CFG.EMAIL_DOMAIN || 'hoso-btgtq.vn';
 // 1. DANH MỤC
 // ─────────────────────────────────────────────────────────
 const DS_DON_VI = ['Lãnh đạo Ban', 'Văn phòng Ban', 'Phòng Lý luận chính trị, Lịch sử Đảng',
-    'Phòng Tuyên truyền, Báo chí - Xuất bản', 'Phòng Khoa giáo, Văn hóa - Văn nghệ'];
+    'Phòng Tuyên truyền, Báo chí - Xuất bản', 'Phòng Khoa giáo, Văn hóa - Văn nghệ', 'Phòng Thông tin - Tổng hợp'];
 const DS_CHUC_VU = ['Trưởng Ban', 'Phó Trưởng ban Thường trực', 'Phó Trưởng Ban', 'Chánh Văn phòng',
     'Phó Chánh Văn phòng', 'Trưởng phòng', 'Phó Trưởng phòng', 'Chuyên viên chính', 'Chuyên viên',
     'Văn thư viên', 'Văn thư viên trung cấp', 'Kế toán viên', 'Kế toán viên trung cấp',
@@ -885,13 +885,13 @@ function chucDanhDayDu(h) {
 const thangKeoDai = ht => /khiển trách|cảnh cáo/i.test(ht || '') ? 6 : /giáng chức|cách chức/i.test(ht || '') ? 12 : null;
 
 const CAU_HINH_NL_MAC_DINH = {
-    truong_ban: 'Trần Mạnh Lợi', chuc_danh_ky: 'TRƯỞNG BAN', thu_ky: 'Đinh Thị Thúy',
+    truong_ban: 'Trần Mạnh Lợi', chuc_danh_ky: 'TRƯỞNG BAN', thu_ky: 'Hoàng Quân',
     dia_diem: 'Phòng họp Hội đồng xét nâng lương Ban Tuyên giáo Tỉnh ủy', phong_lien_quan: 'Văn phòng Ban',
-    can_cu_tx: 'Căn cứ Thông tư số 08/2013/TT-BNV ngày 31/7/2013 của Bộ Nội vụ về Hướng dẫn thực hiện chế độ nâng lương thường xuyên và nâng lương trước thời hạn đối với cán bộ, công chức, viên chức và người lao động;',
+    can_cu_tx: 'Căn cứ Thông tư số 08/2013/TT-BNV, ngày 31/7/2013 của Bộ Nội vụ về Hướng dẫn thực hiện chế độ nâng lương thường xuyên và nâng lương trước thời hạn đối với cán bộ, công chức, viên chức và người lao động;',
     can_cu_vk: 'Căn cứ Thông tư số 03/2021/TT-BNV, ngày 29/6/2021 của Bộ Nội vụ sửa đổi, bổ sung chế độ nâng bậc lương thường xuyên, nâng bậc lương trước thời hạn và chế độ phụ cấp thâm niên vượt khung đối với cán bộ, công chức, viên chức và người lao động;',
-    can_cu_phan_cap: 'Căn cứ Quy định số 09-QĐ/TU ngày 13/11/2025 của Tỉnh ủy về phân cấp quản lý cán bộ và quy hoạch, bổ nhiệm, giới thiệu ứng cử, tạm đình chỉ công tác, cho thôi giữ chức vụ, từ chức, miễn nhiệm đối với cán bộ;',
+    can_cu_phan_cap: 'Căn cứ Quy định số 09-QĐ/TU, ngày 13/11/2025 của Tỉnh ủy về phân cấp quản lý cán bộ và quy hoạch, bổ nhiệm, giới thiệu ứng cử, tạm đình chỉ công tác, cho thôi giữ chức vụ, từ chức, miễn nhiệm đối với cán bộ;',
     can_cu_cong_van: 'Căn cứ Công văn số 588-CV/BTCTU, ngày 10/12/2025 của Ban Tổ chức Tỉnh ủy về việc nâng bậc lương thường xuyên, nâng phụ cấp thâm niên vượt khung và nâng bậc lương trước thời hạn.',
-    thanh_phan: 'Đồng chí Trần Mạnh Lợi, Ủy viên Ban Thường vụ, Trưởng Ban – Chủ tịch Hội đồng xét nâng lương Ban Tuyên giáo Tỉnh ủy – Chủ trì.\nĐồng chí Nguyễn Lam Sơn, Tỉnh ủy viên, Phó Trưởng ban Thường trực.\nĐồng chí Lê Mạnh Cường, Phó Trưởng ban.\nĐồng chí Nguyễn Văn Hưng, Phó Trưởng ban.\nĐồng chí Vương Thúy Hằng, Phó Trưởng ban.\nĐồng chí Hoàng Thị Hằng, Phó Trưởng ban.\nĐồng chí Chẩu Thị Thu, Phó Trưởng ban.\nĐồng chí Đặng Ái Xoan, Phó Trưởng ban.\nĐồng chí Nguyễn Thu Vân, Trưởng phòng Tuyên truyền, Báo chí - Xuất bản.\nĐồng chí Phan Thanh Bình, Trưởng phòng Khoa giáo, Văn hóa - Văn nghệ.\nĐồng chí Đinh Thị Thúy, Chánh văn phòng Ban - Thư ký',
+    thanh_phan: 'Đồng chí Trần Mạnh Lợi, Ủy viên Ban Thường vụ, Trưởng Ban – Chủ tịch Hội đồng xét nâng lương Ban Tuyên giáo Tỉnh ủy – Chủ trì.\nĐồng chí Nguyễn Lam Sơn, Tỉnh ủy viên, Phó Trưởng ban Thường trực.\nĐồng chí Lê Mạnh Cường, Phó Trưởng ban.\nĐồng chí Nguyễn Văn Hưng, Phó Trưởng ban.\nĐồng chí Hoàng Thị Hằng, Phó Trưởng ban.\nĐồng chí Chẩu Thị Thu, Phó Trưởng ban.\nĐồng chí Đặng Ái Xoan, Phó Trưởng ban.\nĐồng chí Nguyễn Thu Vân, Trưởng phòng Tuyên truyền, Báo chí - Xuất bản.\nĐồng chí Phan Thanh Bình, Trưởng phòng Khoa giáo, Văn hóa - Văn nghệ.\nĐồng chí Hoàng Quân, Phó Chánh văn phòng Ban - Thư ký.',
     noi_nhan_qd: 'Như điều 2;\nKế toán Ban;\nHồ sơ cán bộ;\nLưu Ban Tuyên giáo Tỉnh ủy.',
     noi_nhan_tt: 'Như kính gửi;\nLãnh đạo Ban;\nLưu Ban Tuyên giáo Tỉnh ủy.',
 };
@@ -1149,6 +1149,7 @@ function veVanBanNL(vung, { rows, ch }) {
             <label class="o"><span>Ngày ký văn bản <em>*</em></span><input name="ngay_ky" type="date" value="${hn}"></label>
             <label class="o"><span>Giờ bắt đầu họp</span><input name="gio_bd" value="08 giờ 00"></label>
             <label class="o"><span>Giờ kết thúc họp</span><input name="gio_kt" value="09 giờ 00"></label>
+            <label class="o rong" style="flex-direction:row;align-items:center;gap:10px"><input type="checkbox" name="trong_ngay" checked style="width:20px;height:20px;min-height:0"><span style="font-weight:500">Để trống ngày ở dòng "Tuyên Quang, ngày … tháng … năm …" để điền tay khi ký (tháng, năm vẫn in sẵn)</span></label>
             <label class="o rong"><span>Thành phần Hội đồng (mỗi người một dòng)</span><textarea name="thanh_phan" style="min-height:170px">${esc(ch.thanh_phan)}</textarea><small>Sửa cố định ở tab Cài đặt</small></label>
         </div>
         <div class="nhom-nut" style="margin-top:14px"><button class="nut nut-chinh" type="submit">Tạo văn bản</button></div>
@@ -1179,7 +1180,7 @@ function veVanBanNL(vung, { rows, ch }) {
             const [nk, tk, dk] = f.ngay_ky.value.split('-').reverse();
             const soQD = g.qdtx.length + g.qdvk.length > 1 ? '' : f.so_qd.value.trim();
             const d = { soQD, soTT: f.so_tt.value.trim(), ngayKy: nk, thangKy: tk, namKy: dk, ngayHopISO: f.ngay_hop.value, ngayHopVN: ngayVN(f.ngay_hop.value),
-                gioBatDau: f.gio_bd.value.trim(), gioKetThuc: f.gio_kt.value.trim() };
+                gioBatDau: f.gio_bd.value.trim(), gioKetThuc: f.gio_kt.value.trim(), deTrongNgay: f.trong_ngay.checked };
             const ch3 = { ...ch, thanh_phan: f.thanh_phan.value, noi_nhan_qd: String(ch.noi_nhan_qd).split('\n').filter(Boolean), noi_nhan_tt: String(ch.noi_nhan_tt).split('\n').filter(Boolean) };
             const vb = r => ({ ho_ten: r.hs.ho_ten, chuc_danh: chucDanhDayDu(r.hs), don_vi: r.hs.don_vi, ngach: chuanNgach(r.ngach_luong) || '', ma_ngach: r.ma_ngach || '',
                 bac_ht: r.bac_luong, hs_ht: soVN(r.he_so), ngay_ht: r.ngay_huong, bac_moi: r.bac_moi, hs_moi: soVN(r.he_so_moi), ngay_dk: r.ngay_du_kien, vk_ht: r.vuot_khung, vk_moi: r.vuot_khung_moi });
